@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ArrowLeft, CheckCircle2, Loader2 } from "lucide-react";
 
 import { buscarEtiqueta, registrarRecepcion } from "@/lib/bobinas.functions";
