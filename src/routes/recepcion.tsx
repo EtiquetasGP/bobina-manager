@@ -67,9 +67,20 @@ function Recepcion() {
     setExito(null);
   };
 
+  const codigoActualRef = useRef(codigo);
+  codigoActualRef.current = codigo;
+
+  const onChangeCodigo = (value: string) => {
+    setCodigo(value);
+    setDescripcion("");
+    setDescripcionBloqueada(false);
+    setError(null);
+  };
+
   const onBlurCodigo = async () => {
     const valor = codigo.trim();
     if (!valor) {
+      setDescripcion("");
       setDescripcionBloqueada(false);
       return;
     }
@@ -77,16 +88,22 @@ function Recepcion() {
     setError(null);
     try {
       const res = await lookup({ data: { codigo_etiqueta: valor } });
+      if (codigoActualRef.current.trim() !== valor) return;
       if (res.existe) {
         setDescripcion(res.descripcion);
         setDescripcionBloqueada(true);
       } else {
+        setDescripcion("");
         setDescripcionBloqueada(false);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo consultar la etiqueta.");
+      if (codigoActualRef.current.trim() === valor) {
+        setError(e instanceof Error ? e.message : "No se pudo consultar la etiqueta.");
+      }
     } finally {
-      setBuscando(false);
+      if (codigoActualRef.current.trim() === valor) {
+        setBuscando(false);
+      }
     }
   };
 
@@ -198,7 +215,7 @@ function Recepcion() {
             value={codigo}
             maxLength={100}
             autoComplete="off"
-            onChange={(e) => setCodigo(e.target.value)}
+            onChange={(e) => onChangeCodigo(e.target.value)}
             onBlur={onBlurCodigo}
             required
           />
