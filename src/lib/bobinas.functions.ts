@@ -15,7 +15,7 @@ const recepcionSchema = z.object({
 });
 
 export const buscarEtiqueta = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => codigoSchema.parse(data))
+  .validator((data: unknown) => codigoSchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row, error } = await supabaseAdmin
@@ -29,7 +29,7 @@ export const buscarEtiqueta = createServerFn({ method: "POST" })
   });
 
 export const registrarRecepcion = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => recepcionSchema.parse(data))
+  .validator((data: unknown) => recepcionSchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: idBobina, error } = await supabaseAdmin.rpc("registrar_recepcion", {
