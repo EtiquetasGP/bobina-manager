@@ -10,12 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ConsultarBobinaRouteImport } from './routes/consultar-bobina'
 import { Route as DevolucionRouteImport } from './routes/devolucion'
 import { Route as RecepcionRouteImport } from './routes/recepcion'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConsultarBobinaRoute = ConsultarBobinaRouteImport.update({
+  id: '/consultar-bobina',
+  path: '/consultar-bobina',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DevolucionRoute = DevolucionRouteImport.update({
@@ -31,30 +37,34 @@ const RecepcionRoute = RecepcionRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/consultar-bobina': typeof ConsultarBobinaRoute
   '/devolucion': typeof DevolucionRoute
   '/recepcion': typeof RecepcionRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/consultar-bobina': typeof ConsultarBobinaRoute
   '/devolucion': typeof DevolucionRoute
   '/recepcion': typeof RecepcionRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/consultar-bobina': typeof ConsultarBobinaRoute
   '/devolucion': typeof DevolucionRoute
   '/recepcion': typeof RecepcionRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/devolucion' | '/recepcion'
+  fullPaths: '/' | '/consultar-bobina' | '/devolucion' | '/recepcion'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/devolucion' | '/recepcion'
-  id: '__root__' | '/' | '/devolucion' | '/recepcion'
+  to: '/' | '/consultar-bobina' | '/devolucion' | '/recepcion'
+  id: '__root__' | '/' | '/consultar-bobina' | '/devolucion' | '/recepcion'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ConsultarBobinaRoute: typeof ConsultarBobinaRoute
   DevolucionRoute: typeof DevolucionRoute
   RecepcionRoute: typeof RecepcionRoute
 }
@@ -66,6 +76,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/consultar-bobina': {
+      id: '/consultar-bobina'
+      path: '/consultar-bobina'
+      fullPath: '/consultar-bobina'
+      preLoaderRoute: typeof ConsultarBobinaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/devolucion': {
@@ -87,6 +104,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ConsultarBobinaRoute: ConsultarBobinaRoute,
   DevolucionRoute: DevolucionRoute,
   RecepcionRoute: RecepcionRoute,
 }
