@@ -17,6 +17,7 @@ const recepcionSchema = z.object({
 });
 
 export const buscarEtiqueta = createServerFn({ method: "POST" })
+  .middleware([requirePinAcceso])
   .validator((data: unknown) => codigoSchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
