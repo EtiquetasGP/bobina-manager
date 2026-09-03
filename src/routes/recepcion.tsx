@@ -1,15 +1,29 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
-import { ArrowLeft, CheckCircle2, Loader2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Loader2, Lock, LogOut } from "lucide-react";
 
 import { buscarEtiqueta, registrarRecepcion } from "@/lib/bobinas.functions";
+import { estadoAcceso, ingresarPin, salirAcceso } from "@/lib/acceso.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/recepcion")({
+  loader: () => estadoAcceso(),
   component: Recepcion,
+  errorComponent: () => (
+    <main className="mx-auto max-w-2xl px-6 py-10">
+      <p role="alert" className="rounded-md bg-destructive/10 p-4 text-base text-destructive">
+        No se pudo cargar la pantalla de recepción. Recargue la página.
+      </p>
+    </main>
+  ),
+  notFoundComponent: () => (
+    <main className="mx-auto max-w-2xl px-6 py-10">
+      <p>Pantalla no encontrada.</p>
+    </main>
+  ),
   head: () => ({
     meta: [
       { title: "Recepción de Bobinas | Coquimbito" },
