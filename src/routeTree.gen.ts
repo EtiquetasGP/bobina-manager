@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DevolucionRouteImport } from './routes/devolucion'
 import { Route as RecepcionRouteImport } from './routes/recepcion'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevolucionRoute = DevolucionRouteImport.update({
+  id: '/devolucion',
+  path: '/devolucion',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RecepcionRoute = RecepcionRouteImport.update({
@@ -25,27 +31,31 @@ const RecepcionRoute = RecepcionRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/devolucion': typeof DevolucionRoute
   '/recepcion': typeof RecepcionRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/devolucion': typeof DevolucionRoute
   '/recepcion': typeof RecepcionRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/devolucion': typeof DevolucionRoute
   '/recepcion': typeof RecepcionRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/recepcion'
+  fullPaths: '/' | '/devolucion' | '/recepcion'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/recepcion'
-  id: '__root__' | '/' | '/recepcion'
+  to: '/' | '/devolucion' | '/recepcion'
+  id: '__root__' | '/' | '/devolucion' | '/recepcion'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DevolucionRoute: typeof DevolucionRoute
   RecepcionRoute: typeof RecepcionRoute
 }
 
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/devolucion': {
+      id: '/devolucion'
+      path: '/devolucion'
+      fullPath: '/devolucion'
+      preLoaderRoute: typeof DevolucionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/recepcion': {
@@ -70,6 +87,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DevolucionRoute: DevolucionRoute,
   RecepcionRoute: RecepcionRoute,
 }
 export const routeTree = rootRouteImport
