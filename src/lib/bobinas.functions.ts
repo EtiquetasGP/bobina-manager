@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import { requirePinAcceso } from "./acceso.middleware";
+
 const codigoSchema = z.object({
   codigo_etiqueta: z.string().trim().min(1).max(100),
 });
@@ -15,6 +17,7 @@ const recepcionSchema = z.object({
 });
 
 export const buscarEtiqueta = createServerFn({ method: "POST" })
+  .middleware([requirePinAcceso])
   .validator((data: unknown) => codigoSchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -29,6 +32,7 @@ export const buscarEtiqueta = createServerFn({ method: "POST" })
   });
 
 export const registrarRecepcion = createServerFn({ method: "POST" })
+  .middleware([requirePinAcceso])
   .validator((data: unknown) => recepcionSchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
