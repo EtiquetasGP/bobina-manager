@@ -24,7 +24,7 @@ export const Route = createFileRoute("/")({
 
 const acciones = [
   { label: "RECEPCIÓN", icon: PackagePlus, to: "/recepcion" as const, activo: true },
-  { label: "DEVOLUCIÓN", icon: Undo2, activo: false },
+  { label: "DEVOLUCIÓN", icon: Undo2, to: "/devolucion" as const, activo: true },
   { label: "CONSULTAR BOBINA", icon: Search, activo: false },
   { label: "INVENTARIO", icon: ClipboardList, activo: false },
   { label: "PICKING", icon: Boxes, activo: false },
