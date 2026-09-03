@@ -58,6 +58,24 @@ const devolucionSchema = z.object({
   observacion: z.string().trim().max(1000),
 });
 
+export type BobinaFicha = {
+  id_bobina: string;
+  codigo_etiqueta: string | null;
+  descripcion: string | null;
+  cantidad_actual: number | null;
+  ubicacion: string | null;
+  estado: string | null;
+  vigencia: string | null;
+  fecha_vencimiento: string | null;
+  fecha_ingreso: string | null;
+  proveedor: string | null;
+  operario_ingreso: string | null;
+  ultima_fecha_devolucion: string | null;
+  ultima_linea: string | null;
+  ultimo_operario_devolucion: string | null;
+  origen_alta: string | null;
+};
+
 export const consultarBobina = createServerFn({ method: "POST" })
   .validator((data: unknown) => idBobinaSchema.parse(data))
   .handler(async ({ data }) => {
@@ -67,8 +85,8 @@ export const consultarBobina = createServerFn({ method: "POST" })
     } as never);
 
     if (error) throw new Error(error.message);
-    const lista = (rows ?? []) as unknown as Record<string, unknown>[];
-    const bobina = lista[0] ?? null;
+    const lista = (rows ?? []) as unknown as BobinaFicha[];
+    const bobina: BobinaFicha | null = lista[0] ?? null;
     return { bobina };
   });
 

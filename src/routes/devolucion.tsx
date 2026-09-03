@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, CheckCircle2, Loader2 } from "lucide-react";
 
-import { consultarBobina, registrarDevolucion } from "@/lib/bobinas.functions";
+import { consultarBobina, registrarDevolucion, type BobinaFicha } from "@/lib/bobinas.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,7 +41,7 @@ export const Route = createFileRoute("/devolucion")({
   }),
 });
 
-type Bobina = Record<string, unknown>;
+type Bobina = BobinaFicha;
 
 type Exito = {
   id_bobina: string;
@@ -98,7 +98,7 @@ function Devolucion() {
     setBuscando(true);
     setError(null);
     try {
-      const res = await consultar({ data: { id_bobina: valor } });
+      const res: { bobina: Bobina | null } = await consultar({ data: { id_bobina: valor } });
       if (!res.bobina) {
         setBobina(null);
         setError("Bobina no encontrada");
@@ -106,8 +106,8 @@ function Devolucion() {
         escanerRef.current?.focus();
         return;
       }
-      setBobina(res.bobina as Bobina);
-      setUbicacion(texto((res.bobina as Bobina)["ubicacion"]) === "—" ? "" : String((res.bobina as Bobina)["ubicacion"]));
+      setBobina(res.bobina);
+      setUbicacion(res.bobina.ubicacion ?? "");
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo consultar la bobina.");
     } finally {
@@ -124,7 +124,7 @@ function Devolucion() {
     if (!Number.isInteger(cantidadNum) || cantidadNum <= 0)
       return setError("La cantidad devuelta debe ser un número entero positivo.");
 
-    const idBobina = String(bobina["id_bobina"]);
+    const idBobina = String(bobina.id_bobina);
     setEnviando(true);
     try {
       await registrar({
@@ -138,14 +138,14 @@ function Devolucion() {
         },
       });
 
-      const res = await consultar({ data: { id_bobina: idBobina } });
-      const actualizada = res.bobina as Bobina | null;
+      const res: { bobina: Bobina | null } = await consultar({ data: { id_bobina: idBobina } });
+      const actualizada = res.bobina;
       setExito({
         id_bobina: idBobina,
-        cantidad_actual: texto(actualizada?.["cantidad_actual"]),
-        linea: texto(actualizada?.["ultima_linea"] ?? linea.trim()),
-        ubicacion: texto(actualizada?.["ubicacion"]),
-        operario: texto(actualizada?.["ultimo_operario_devolucion"] ?? operario.trim()),
+        cantidad_actual: texto(actualizada?.cantidad_actual),
+        linea: texto(actualizada?.ultima_linea ?? linea.trim()),
+        ubicacion: texto(actualizada?.ubicacion),
+        operario: texto(actualizada?.ultimo_operario_devolucion ?? operario.trim()),
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo registrar la devolución.");
@@ -251,16 +251,16 @@ function Devolucion() {
       {bobina && (
         <>
           <section className="mt-8 rounded-xl border border-border bg-card p-6">
-            <h2 className="text-xl font-bold">{texto(bobina["id_bobina"])}</h2>
+            <h2 className="text-xl font-bold">{texto(bobina.id_bobina)}</h2>
             <dl className="mt-4 space-y-3 text-base">
               {[
-                ["Código de etiqueta", bobina["codigo_etiqueta"]],
-                ["Descripción", bobina["descripcion"]],
-                ["Cantidad actual", bobina["cantidad_actual"]],
-                ["Ubicación actual", bobina["ubicacion"]],
-                ["Estado", bobina["estado"]],
-                ["Vigencia", bobina["vigencia"]],
-                ["Fecha de vencimiento", bobina["fecha_vencimiento"]],
+                ["Código de etiqueta", bobina.codigo_etiqueta],
+                ["Descripción", bobina.descripcion],
+                ["Cantidad actual", bobina.cantidad_actual],
+                ["Ubicación actual", bobina.ubicacion],
+                ["Estado", bobina.estado],
+                ["Vigencia", bobina.vigencia],
+                ["Fecha de vencimiento", bobina.fecha_vencimiento],
               ].map(([etiqueta, valor]) => (
                 <div
                   key={String(etiqueta)}
