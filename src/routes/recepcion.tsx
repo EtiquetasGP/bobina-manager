@@ -1,16 +1,14 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
-import { ArrowLeft, CheckCircle2, Loader2, Lock, LogOut } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Loader2 } from "lucide-react";
 
 import { buscarEtiqueta, registrarRecepcion } from "@/lib/bobinas.functions";
-import { estadoAcceso, ingresarPin, salirAcceso } from "@/lib/acceso.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/recepcion")({
-  loader: () => estadoAcceso(),
   component: Recepcion,
   errorComponent: () => (
     <main className="mx-auto max-w-2xl px-6 py-10">
@@ -52,97 +50,10 @@ type Exito = {
 
 const inputClass = "h-14 text-lg";
 
-function PanelPin() {
-  const router = useRouter();
-  const enviarPin = useServerFn(ingresarPin);
-  const [pin, setPin] = useState("");
-  const [mensaje, setMensaje] = useState<string | null>(null);
-  const [verificando, setVerificando] = useState(false);
-
-  const onSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!pin.trim()) return;
-    setVerificando(true);
-    setMensaje(null);
-    try {
-      const res = await enviarPin({ data: { pin } });
-      if (res.ok) {
-        setPin("");
-        await router.invalidate();
-        return;
-      }
-      setMensaje(
-        res.bloqueado
-          ? `Demasiados intentos. Espere ${res.segundos} segundos.`
-          : "PIN incorrecto.",
-      );
-    } catch {
-      setMensaje("No se pudo verificar el PIN. Intente nuevamente.");
-    } finally {
-      setVerificando(false);
-    }
-  };
-
-  return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-10">
-      <Link
-        to="/"
-        className="mb-8 inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" aria-hidden="true" /> Menú principal
-      </Link>
-
-      <div className="rounded-xl border border-border bg-card p-8">
-        <Lock className="mx-auto size-12 text-muted-foreground" aria-hidden="true" />
-        <h1 className="mt-4 text-center text-2xl font-bold tracking-tight">
-          Ingrese el PIN de planta
-        </h1>
-        <p className="mt-2 text-center text-sm text-muted-foreground">
-          Acceso requerido para registrar recepciones.
-        </p>
-
-        <form onSubmit={onSubmit} className="mt-8 space-y-4">
-          <Label htmlFor="pin" className="text-base">
-            PIN
-          </Label>
-          <Input
-            id="pin"
-            className="h-16 text-center text-3xl tracking-[0.5em]"
-            type="password"
-            inputMode="numeric"
-            autoComplete="off"
-            autoFocus
-            maxLength={16}
-            value={pin}
-            onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-            required
-          />
-          {mensaje && (
-            <p role="alert" className="rounded-md bg-destructive/10 p-3 text-base text-destructive">
-              {mensaje}
-            </p>
-          )}
-          <Button
-            type="submit"
-            size="lg"
-            disabled={verificando}
-            className="h-16 w-full text-xl font-bold"
-          >
-            {verificando ? "VERIFICANDO…" : "ACCEDER"}
-          </Button>
-        </form>
-      </div>
-    </main>
-  );
-}
-
 function Recepcion() {
   const router = useRouter();
-  const { autorizado } = Route.useLoaderData();
   const lookup = useServerFn(buscarEtiqueta);
   const registrar = useServerFn(registrarRecepcion);
-  const salir = useServerFn(salirAcceso);
-
 
   const [codigo, setCodigo] = useState("");
   const [descripcion, setDescripcion] = useState("");
@@ -245,8 +156,6 @@ function Recepcion() {
     }
   };
 
-  if (!autorizado) return <PanelPin />;
-
   if (exito) {
     return (
       <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center px-6 py-10">
@@ -295,25 +204,12 @@ function Recepcion() {
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-10">
-      <div className="flex items-center justify-between gap-4">
-        <Link
-          to="/"
-          className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" aria-hidden="true" /> Menú principal
-        </Link>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={async () => {
-            await salir();
-            await router.invalidate();
-          }}
-        >
-          <LogOut className="size-4" aria-hidden="true" /> SALIR
-        </Button>
-      </div>
-
+      <Link
+        to="/"
+        className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="size-4" aria-hidden="true" /> Menú principal
+      </Link>
 
       <h1 className="mt-6 text-3xl font-bold tracking-tight">Recepción de Bobina</h1>
       <p className="mt-1 text-base text-muted-foreground">
