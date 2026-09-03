@@ -245,6 +245,8 @@ function Recepcion() {
     }
   };
 
+  if (!autorizado) return <PanelPin />;
+
   if (exito) {
     return (
       <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center px-6 py-10">
