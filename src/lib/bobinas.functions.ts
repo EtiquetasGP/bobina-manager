@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import { requirePinAcceso } from "./acceso.middleware";
+
 const codigoSchema = z.object({
   codigo_etiqueta: z.string().trim().min(1).max(100),
 });
