@@ -295,12 +295,25 @@ function Recepcion() {
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-10">
-      <Link
-        to="/"
-        className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" aria-hidden="true" /> Menú principal
-      </Link>
+      <div className="flex items-center justify-between gap-4">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" /> Menú principal
+        </Link>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={async () => {
+            await salir();
+            await router.invalidate();
+          }}
+        >
+          <LogOut className="size-4" aria-hidden="true" /> SALIR
+        </Button>
+      </div>
+
 
       <h1 className="mt-6 text-3xl font-bold tracking-tight">Recepción de Bobina</h1>
       <p className="mt-1 text-base text-muted-foreground">
