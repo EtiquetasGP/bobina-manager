@@ -158,11 +158,34 @@ export type Database = {
           vigencia: string
         }[]
       }
+      registrar_alta_inventario: {
+        Args: {
+          p_cantidad: number
+          p_codigo_etiqueta: string
+          p_descripcion: string
+          p_fecha_ingreso: string
+          p_observacion?: string
+          p_operario: string
+          p_proveedor: string
+          p_ubicacion: string
+        }
+        Returns: string
+      }
       registrar_devolucion: {
         Args: {
           p_cantidad: number
           p_id_bobina: string
           p_linea: string
+          p_observacion?: string
+          p_operario: string
+          p_ubicacion: string
+        }
+        Returns: string
+      }
+      registrar_inventario_existente: {
+        Args: {
+          p_cantidad: number
+          p_id_bobina: string
           p_observacion?: string
           p_operario: string
           p_ubicacion: string
