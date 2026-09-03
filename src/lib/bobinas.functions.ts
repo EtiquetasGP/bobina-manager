@@ -32,6 +32,7 @@ export const buscarEtiqueta = createServerFn({ method: "POST" })
   });
 
 export const registrarRecepcion = createServerFn({ method: "POST" })
+  .middleware([requirePinAcceso])
   .validator((data: unknown) => recepcionSchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
