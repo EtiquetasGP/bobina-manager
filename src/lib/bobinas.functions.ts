@@ -106,3 +106,57 @@ export const registrarDevolucion = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { id_bobina: id as unknown as string };
   });
+
+const inventarioExistenteSchema = z.object({
+  id_bobina: z.string().trim().min(1).max(100),
+  cantidad: z.number().int().positive().max(1_000_000_000),
+  ubicacion: z.string().trim().max(200),
+  operario: z.string().trim().max(200),
+  observacion: z.string().trim().max(1000),
+});
+
+const altaInventarioSchema = z.object({
+  codigo_etiqueta: z.string().trim().min(1).max(100),
+  descripcion: z.string().trim().min(1).max(500),
+  cantidad: z.number().int().positive().max(1_000_000_000),
+  fecha_ingreso: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/),
+  proveedor: z.string().trim().max(200),
+  ubicacion: z.string().trim().max(200),
+  operario: z.string().trim().max(200),
+  observacion: z.string().trim().max(1000),
+});
+
+export const registrarInventarioExistente = createServerFn({ method: "POST" })
+  .validator((data: unknown) => inventarioExistenteSchema.parse(data))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: id, error } = await supabaseAdmin.rpc("registrar_inventario_existente", {
+      p_id_bobina: data.id_bobina,
+      p_cantidad: data.cantidad,
+      p_ubicacion: data.ubicacion || null,
+      p_operario: data.operario || null,
+      p_observacion: data.observacion || null,
+    } as never);
+
+    if (error) throw new Error(error.message);
+    return { id_bobina: id as unknown as string };
+  });
+
+export const registrarAltaInventario = createServerFn({ method: "POST" })
+  .validator((data: unknown) => altaInventarioSchema.parse(data))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: id, error } = await supabaseAdmin.rpc("registrar_alta_inventario", {
+      p_codigo_etiqueta: data.codigo_etiqueta,
+      p_descripcion: data.descripcion,
+      p_cantidad: data.cantidad,
+      p_fecha_ingreso: data.fecha_ingreso,
+      p_proveedor: data.proveedor || null,
+      p_ubicacion: data.ubicacion || null,
+      p_operario: data.operario || null,
+      p_observacion: data.observacion || null,
+    } as never);
+
+    if (error) throw new Error(error.message);
+    return { id_bobina: id as unknown as string };
+  });

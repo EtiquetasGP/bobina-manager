@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ConsultarBobinaRouteImport } from './routes/consultar-bobina'
 import { Route as DevolucionRouteImport } from './routes/devolucion'
+import { Route as InventarioRouteImport } from './routes/inventario'
 import { Route as RecepcionRouteImport } from './routes/recepcion'
 
 const IndexRoute = IndexRouteImport.update({
@@ -29,6 +30,11 @@ const DevolucionRoute = DevolucionRouteImport.update({
   path: '/devolucion',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InventarioRoute = InventarioRouteImport.update({
+  id: '/inventario',
+  path: '/inventario',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RecepcionRoute = RecepcionRouteImport.update({
   id: '/recepcion',
   path: '/recepcion',
@@ -39,12 +45,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/consultar-bobina': typeof ConsultarBobinaRoute
   '/devolucion': typeof DevolucionRoute
+  '/inventario': typeof InventarioRoute
   '/recepcion': typeof RecepcionRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/consultar-bobina': typeof ConsultarBobinaRoute
   '/devolucion': typeof DevolucionRoute
+  '/inventario': typeof InventarioRoute
   '/recepcion': typeof RecepcionRoute
 }
 export interface FileRoutesById {
@@ -52,20 +60,29 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/consultar-bobina': typeof ConsultarBobinaRoute
   '/devolucion': typeof DevolucionRoute
+  '/inventario': typeof InventarioRoute
   '/recepcion': typeof RecepcionRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/consultar-bobina' | '/devolucion' | '/recepcion'
+  fullPaths:
+    '/' | '/consultar-bobina' | '/devolucion' | '/inventario' | '/recepcion'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/consultar-bobina' | '/devolucion' | '/recepcion'
-  id: '__root__' | '/' | '/consultar-bobina' | '/devolucion' | '/recepcion'
+  to: '/' | '/consultar-bobina' | '/devolucion' | '/inventario' | '/recepcion'
+  id:
+    | '__root__'
+    | '/'
+    | '/consultar-bobina'
+    | '/devolucion'
+    | '/inventario'
+    | '/recepcion'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ConsultarBobinaRoute: typeof ConsultarBobinaRoute
   DevolucionRoute: typeof DevolucionRoute
+  InventarioRoute: typeof InventarioRoute
   RecepcionRoute: typeof RecepcionRoute
 }
 
@@ -92,6 +109,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DevolucionRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/inventario': {
+      id: '/inventario'
+      path: '/inventario'
+      fullPath: '/inventario'
+      preLoaderRoute: typeof InventarioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/recepcion': {
       id: '/recepcion'
       path: '/recepcion'
@@ -106,6 +130,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ConsultarBobinaRoute: ConsultarBobinaRoute,
   DevolucionRoute: DevolucionRoute,
+  InventarioRoute: InventarioRoute,
   RecepcionRoute: RecepcionRoute,
 }
 export const routeTree = rootRouteImport
