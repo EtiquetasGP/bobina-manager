@@ -1,0 +1,9 @@
+{
+  "name": "Gestión de Bobinas - Coquimbito",
+  "short_name": "Bobinas CQ",
+  "description": "Sistema de gestión de bobinas de etiquetas",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0f172a"
+}
