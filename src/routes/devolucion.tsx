@@ -93,7 +93,7 @@ function Devolucion() {
   };
 
   const buscar = async () => {
-    const valor = id.trim();
+const valor = id.trim().toUpperCase();
     if (!valor) return;
     setBuscando(true);
     setError(null);
