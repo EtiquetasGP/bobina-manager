@@ -1,9 +1,17 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
-import { ArrowLeft, CheckCircle2, Loader2 } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  Loader2,
+} from "lucide-react";
 
-import { buscarEtiqueta, registrarRecepcion } from "@/lib/bobinas.functions";
+import {
+  buscarEtiqueta,
+  registrarRecepcionMultiple,
+} from "@/lib/bobinas.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,7 +20,10 @@ export const Route = createFileRoute("/recepcion")({
   component: Recepcion,
   errorComponent: () => (
     <main className="mx-auto max-w-2xl px-6 py-10">
-      <p role="alert" className="rounded-md bg-destructive/10 p-4 text-base text-destructive">
+      <p
+        role="alert"
+        className="rounded-md bg-destructive/10 p-4 text-base text-destructive"
+      >
         No se pudo cargar la pantalla de recepción. Recargue la página.
       </p>
     </main>
@@ -28,12 +39,16 @@ export const Route = createFileRoute("/recepcion")({
       {
         name: "description",
         content:
-          "Registrar el ingreso de una bobina en planta Coquimbito: código de etiqueta, cantidad, proveedor, ubicación y operario.",
+          "Registrar el ingreso de una o varias bobinas en planta Coquimbito.",
       },
-      { property: "og:title", content: "Recepción de Bobinas | Coquimbito" },
+      {
+        property: "og:title",
+        content: "Recepción de Bobinas | Coquimbito",
+      },
       {
         property: "og:description",
-        content: "Registrar el ingreso de una bobina en planta Coquimbito.",
+        content:
+          "Registrar el ingreso de una o varias bobinas en planta Coquimbito.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -42,7 +57,11 @@ export const Route = createFileRoute("/recepcion")({
 });
 
 type Exito = {
-  id_bobina: string;
+  ok: boolean;
+  ids_bobinas: string[];
+  cantidad_solicitada: number;
+  cantidad_creada: number;
+  mensaje: string;
   codigo_etiqueta: string;
   descripcion: string;
   cantidad: string;
@@ -53,15 +72,19 @@ const inputClass = "h-14 text-lg";
 function Recepcion() {
   const router = useRouter();
   const lookup = useServerFn(buscarEtiqueta);
-  const registrar = useServerFn(registrarRecepcion);
+  const registrar = useServerFn(registrarRecepcionMultiple);
 
   const [codigo, setCodigo] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [descripcionBloqueada, setDescripcionBloqueada] = useState(false);
+
+  const [cantidadBobinas, setCantidadBobinas] = useState("1");
   const [cantidad, setCantidad] = useState("");
+
   const [proveedor, setProveedor] = useState("");
   const [ubicacion, setUbicacion] = useState("");
   const [operario, setOperario] = useState("");
+
   const [buscando, setBuscando] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +94,7 @@ function Recepcion() {
     setCodigo("");
     setDescripcion("");
     setDescripcionBloqueada(false);
+    setCantidadBobinas("1");
     setCantidad("");
     setProveedor("");
     setUbicacion("");
@@ -91,16 +115,25 @@ function Recepcion() {
 
   const onBlurCodigo = async () => {
     const valor = codigo.trim();
+
     if (!valor) {
       setDescripcion("");
       setDescripcionBloqueada(false);
       return;
     }
+
     setBuscando(true);
     setError(null);
+
     try {
-      const res = await lookup({ data: { codigo_etiqueta: valor } });
+      const res = await lookup({
+        data: {
+          codigo_etiqueta: valor,
+        },
+      });
+
       if (codigoActualRef.current.trim() !== valor) return;
+
       if (res.existe) {
         setDescripcion(res.descripcion);
         setDescripcionBloqueada(true);
@@ -110,7 +143,11 @@ function Recepcion() {
       }
     } catch (e) {
       if (codigoActualRef.current.trim() === valor) {
-        setError(e instanceof Error ? e.message : "No se pudo consultar la etiqueta.");
+        setError(
+          e instanceof Error
+            ? e.message
+            : "No se pudo consultar la etiqueta.",
+        );
       }
     } finally {
       if (codigoActualRef.current.trim() === valor) {
@@ -121,64 +158,194 @@ function Recepcion() {
 
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+
+    if (enviando) return;
+
     setError(null);
 
     const codigoLimpio = codigo.trim();
     const cantidadNum = Number(cantidad);
+    const cantidadBobinasNum = Number(cantidadBobinas);
 
-    if (!codigoLimpio) return setError("Ingrese el código de etiqueta.");
-    if (!descripcion.trim()) return setError("La descripción es obligatoria para un código nuevo.");
-    if (!Number.isInteger(cantidadNum) || cantidadNum <= 0)
-      return setError("La cantidad debe ser un número entero positivo.");
+    if (!codigoLimpio) {
+      return setError("Ingrese el código de etiqueta.");
+    }
+
+    if (!descripcion.trim()) {
+      return setError(
+        "La descripción es obligatoria para un código nuevo.",
+      );
+    }
+
+    if (
+      !Number.isInteger(cantidadBobinasNum) ||
+      cantidadBobinasNum < 1 ||
+      cantidadBobinasNum > 100
+    ) {
+      return setError(
+        "La cantidad de bobinas debe ser un número entero entre 1 y 100.",
+      );
+    }
+
+    if (!Number.isInteger(cantidadNum) || cantidadNum <= 0) {
+      return setError(
+        "La cantidad por bobina debe ser un número entero positivo.",
+      );
+    }
 
     setEnviando(true);
+
     try {
       const res = await registrar({
         data: {
           codigo_etiqueta: codigoLimpio,
           descripcion: descripcion.trim(),
           cantidad: cantidadNum,
+          cantidad_bobinas: cantidadBobinasNum,
           proveedor: proveedor.trim(),
           ubicacion: ubicacion.trim(),
           operario: operario.trim(),
         },
       });
+
+      if (!res.ok && res.cantidad_creada === 0) {
+        setError(res.mensaje);
+        return;
+      }
+
       setExito({
-        id_bobina: res.id_bobina,
+        ok: res.ok,
+        ids_bobinas: res.ids_bobinas,
+        cantidad_solicitada: res.cantidad_solicitada,
+        cantidad_creada: res.cantidad_creada,
+        mensaje: res.mensaje,
         codigo_etiqueta: codigoLimpio,
         descripcion: descripcion.trim(),
         cantidad: String(cantidadNum),
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo registrar la recepción.");
+      setError(
+        e instanceof Error
+          ? e.message
+          : "No se pudo registrar la recepción.",
+      );
     } finally {
       setEnviando(false);
     }
   };
 
   if (exito) {
+    const recepcionParcial = !exito.ok;
+    const esUnaBobina = exito.cantidad_creada === 1;
+
     return (
       <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center px-6 py-10">
         <div className="rounded-xl border border-border bg-card p-8 text-center">
-          <CheckCircle2 className="mx-auto size-16 text-primary" aria-hidden="true" />
+          {recepcionParcial ? (
+            <AlertTriangle
+              className="mx-auto size-16 text-destructive"
+              aria-hidden="true"
+            />
+          ) : (
+            <CheckCircle2
+              className="mx-auto size-16 text-primary"
+              aria-hidden="true"
+            />
+          )}
+
           <h1 className="mt-4 text-2xl font-bold tracking-tight sm:text-3xl">
-            BOBINA REGISTRADA CORRECTAMENTE
+            {recepcionParcial
+              ? "RECEPCIÓN PARCIAL"
+              : esUnaBobina
+                ? "BOBINA REGISTRADA CORRECTAMENTE"
+                : `${exito.cantidad_creada} BOBINAS REGISTRADAS CORRECTAMENTE`}
           </h1>
-          <p className="mt-6 text-sm uppercase text-muted-foreground">ID Bobina</p>
-          <p className="text-4xl font-bold tabular-nums">{exito.id_bobina}</p>
+
+          {recepcionParcial && (
+            <div
+              role="alert"
+              className="mt-6 rounded-md bg-destructive/10 p-4 text-left text-destructive"
+            >
+              <p className="font-semibold">{exito.mensaje}</p>
+              <p className="mt-2 text-sm">
+                No vuelva a registrar la recepción completa sin revisar
+                primero los ID que aparecen abajo.
+              </p>
+            </div>
+          )}
+
+          {esUnaBobina ? (
+            <>
+              <p className="mt-6 text-sm uppercase text-muted-foreground">
+                ID Bobina
+              </p>
+              <p className="text-4xl font-bold tabular-nums">
+                {exito.ids_bobinas[0]}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="mt-6 text-sm uppercase text-muted-foreground">
+                IDs de bobinas generados
+              </p>
+
+              <div className="mt-3 max-h-64 overflow-y-auto rounded-lg border border-border bg-background p-4">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {exito.ids_bobinas.map((id) => (
+                    <div
+                      key={id}
+                      className="rounded-md border border-border px-3 py-2 text-center text-base font-bold tabular-nums"
+                    >
+                      {id}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
 
           <dl className="mt-8 space-y-3 text-left text-lg">
             <div className="flex justify-between gap-4 border-b border-border pb-2">
-              <dt className="text-muted-foreground">Código de etiqueta</dt>
-              <dd className="font-semibold">{exito.codigo_etiqueta}</dd>
+              <dt className="text-muted-foreground">
+                Código de etiqueta
+              </dt>
+              <dd className="font-semibold">
+                {exito.codigo_etiqueta}
+              </dd>
             </div>
+
             <div className="flex justify-between gap-4 border-b border-border pb-2">
               <dt className="text-muted-foreground">Descripción</dt>
-              <dd className="text-right font-semibold">{exito.descripcion}</dd>
+              <dd className="text-right font-semibold">
+                {exito.descripcion}
+              </dd>
             </div>
+
+            <div className="flex justify-between gap-4 border-b border-border pb-2">
+              <dt className="text-muted-foreground">
+                Cantidad por bobina
+              </dt>
+              <dd className="font-semibold tabular-nums">
+                {exito.cantidad}
+              </dd>
+            </div>
+
+            <div className="flex justify-between gap-4 border-b border-border pb-2">
+              <dt className="text-muted-foreground">
+                Bobinas solicitadas
+              </dt>
+              <dd className="font-semibold tabular-nums">
+                {exito.cantidad_solicitada}
+              </dd>
+            </div>
+
             <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">Cantidad</dt>
-              <dd className="font-semibold tabular-nums">{exito.cantidad}</dd>
+              <dt className="text-muted-foreground">
+                Bobinas creadas
+              </dt>
+              <dd className="font-semibold tabular-nums">
+                {exito.cantidad_creada}
+              </dd>
             </div>
           </dl>
 
@@ -193,7 +360,13 @@ function Recepcion() {
             >
               NUEVA RECEPCIÓN
             </Button>
-            <Button asChild variant="outline" size="lg" className="h-12 text-base">
+
+            <Button
+              asChild
+              variant="outline"
+              size="lg"
+              className="h-12 text-base"
+            >
               <Link to="/">Volver al menú</Link>
             </Button>
           </div>
@@ -202,18 +375,25 @@ function Recepcion() {
     );
   }
 
+  const cantidadBobinasVista = Number(cantidadBobinas);
+
   return (
     <main className="mx-auto max-w-2xl px-6 py-10">
       <Link
         to="/"
         className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
       >
-        <ArrowLeft className="size-4" aria-hidden="true" /> Menú principal
+        <ArrowLeft className="size-4" aria-hidden="true" />
+        Menú principal
       </Link>
 
-      <h1 className="mt-6 text-3xl font-bold tracking-tight">Recepción de Bobina</h1>
+      <h1 className="mt-6 text-3xl font-bold tracking-tight">
+        Recepción de Bobinas
+      </h1>
+
       <p className="mt-1 text-base text-muted-foreground">
-        Complete los datos y confirme el ingreso.
+        Complete los datos una sola vez y defina cuántas bobinas desea
+        ingresar.
       </p>
 
       <form onSubmit={onSubmit} className="mt-8 space-y-6">
@@ -221,6 +401,7 @@ function Recepcion() {
           <Label htmlFor="codigo" className="text-base">
             Código de etiqueta
           </Label>
+
           <Input
             id="codigo"
             className={inputClass}
@@ -231,9 +412,14 @@ function Recepcion() {
             onBlur={onBlurCodigo}
             required
           />
+
           {buscando && (
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Buscando etiqueta…
+              <Loader2
+                className="size-4 animate-spin"
+                aria-hidden="true"
+              />
+              Buscando etiqueta…
             </p>
           )}
         </div>
@@ -242,6 +428,7 @@ function Recepcion() {
           <Label htmlFor="descripcion" className="text-base">
             Descripción
           </Label>
+
           <Input
             id="descripcion"
             className={inputClass}
@@ -251,6 +438,7 @@ function Recepcion() {
             onChange={(e) => setDescripcion(e.target.value)}
             required
           />
+
           {descripcionBloqueada && (
             <p className="text-sm text-muted-foreground">
               Descripción tomada del maestro de etiquetas.
@@ -258,21 +446,59 @@ function Recepcion() {
           )}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="cantidad" className="text-base">
-            Cantidad
-          </Label>
-          <Input
-            id="cantidad"
-            className={inputClass}
-            type="number"
-            min={1}
-            step={1}
-            inputMode="numeric"
-            value={cantidad}
-            onChange={(e) => setCantidad(e.target.value.replace(/[^0-9]/g, ""))}
-            required
-          />
+        <div className="grid gap-6 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="cantidad-bobinas" className="text-base">
+              Cantidad de bobinas
+            </Label>
+
+            <Input
+              id="cantidad-bobinas"
+              className={inputClass}
+              type="number"
+              min={1}
+              max={100}
+              step={1}
+              inputMode="numeric"
+              value={cantidadBobinas}
+              onChange={(e) =>
+                setCantidadBobinas(
+                  e.target.value.replace(/[^0-9]/g, ""),
+                )
+              }
+              required
+            />
+
+            <p className="text-sm text-muted-foreground">
+              Entre 1 y 100. Cada bobina recibirá un CQ distinto.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="cantidad" className="text-base">
+              Cantidad por bobina
+            </Label>
+
+            <Input
+              id="cantidad"
+              className={inputClass}
+              type="number"
+              min={1}
+              step={1}
+              inputMode="numeric"
+              value={cantidad}
+              onChange={(e) =>
+                setCantidad(
+                  e.target.value.replace(/[^0-9]/g, ""),
+                )
+              }
+              required
+            />
+
+            <p className="text-sm text-muted-foreground">
+              Esta cantidad se asignará a cada bobina creada.
+            </p>
+          </div>
         </div>
 
         <div className="grid gap-6 sm:grid-cols-2">
@@ -280,6 +506,7 @@ function Recepcion() {
             <Label htmlFor="proveedor" className="text-base">
               Proveedor (opcional)
             </Label>
+
             <Input
               id="proveedor"
               className={inputClass}
@@ -288,10 +515,12 @@ function Recepcion() {
               onChange={(e) => setProveedor(e.target.value)}
             />
           </div>
+
           <div className="space-y-2">
             <Label htmlFor="ubicacion" className="text-base">
               Ubicación (opcional)
             </Label>
+
             <Input
               id="ubicacion"
               className={inputClass}
@@ -306,6 +535,7 @@ function Recepcion() {
           <Label htmlFor="operario" className="text-base">
             Operario (opcional)
           </Label>
+
           <Input
             id="operario"
             className={inputClass}
@@ -316,7 +546,10 @@ function Recepcion() {
         </div>
 
         {error && (
-          <p role="alert" className="rounded-md bg-destructive/10 p-4 text-base text-destructive">
+          <p
+            role="alert"
+            className="rounded-md bg-destructive/10 p-4 text-base text-destructive"
+          >
             {error}
           </p>
         )}
@@ -327,7 +560,12 @@ function Recepcion() {
           disabled={enviando}
           className="h-20 w-full text-2xl font-bold"
         >
-          {enviando ? "REGISTRANDO…" : "INGRESAR BOBINA"}
+          {enviando
+            ? "REGISTRANDO…"
+            : Number.isInteger(cantidadBobinasVista) &&
+                cantidadBobinasVista > 1
+              ? `INGRESAR ${cantidadBobinasVista} BOBINAS`
+              : "INGRESAR BOBINA"}
         </Button>
       </form>
     </main>
