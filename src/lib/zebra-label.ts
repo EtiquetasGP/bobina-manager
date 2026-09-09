@@ -1,37 +1,80 @@
-export type ZebraLabelData = {
+export type EtiquetaZebraInput = {
   id_bobina: string;
   codigo_etiqueta: string;
   descripcion: string;
-  cantidad: number | string;
+  cantidad: string | number;
+  copias?: number;
 };
 
-function limpiarTextoZpl(valor: string) {
-  return valor
+function limpiarTexto(valor: string | number | null | undefined): string {
+  return String(valor ?? "")
+    .replace(/\r/g, " ")
+    .replace(/\n/g, " ")
     .replace(/\^/g, " ")
     .replace(/~/g, " ")
-    .replace(/\r?\n/g, " ")
     .trim();
 }
 
-function tamanoDescripcion(texto: string) {
-  const largo = texto.length;
+function partirDescripcion(
+  texto: string,
+  maxLinea1 = 32,
+  maxLinea2 = 32,
+): { linea1: string; linea2: string } {
+  const limpio = limpiarTexto(texto);
 
-  if (largo <= 32) return { alto: 28, ancho: 22 };
-  if (largo <= 42) return { alto: 25, ancho: 18 };
-  if (largo <= 52) return { alto: 22, ancho: 15 };
-  if (largo <= 65) return { alto: 19, ancho: 12 };
+  if (limpio.length <= maxLinea1) {
+    return {
+      linea1: limpio,
+      linea2: "",
+    };
+  }
 
-  return { alto: 16, ancho: 9 };
+  const corte1 = limpio.lastIndexOf(" ", maxLinea1);
+  const idx1 = corte1 > 0 ? corte1 : maxLinea1;
+
+  const linea1 = limpio.slice(0, idx1).trim();
+  const resto = limpio.slice(idx1).trim();
+
+  if (resto.length <= maxLinea2) {
+    return {
+      linea1,
+      linea2: resto,
+    };
+  }
+
+  const corte2 = resto.lastIndexOf(" ", maxLinea2);
+  const idx2 = corte2 > 0 ? corte2 : maxLinea2;
+
+  return {
+    linea1,
+    linea2: resto.slice(0, idx2).trim(),
+  };
 }
 
-export function generarEtiquetaZpl(datos: ZebraLabelData) {
-  const id = limpiarTextoZpl(datos.id_bobina);
-  const codigo = limpiarTextoZpl(datos.codigo_etiqueta);
-  const descripcion = limpiarTextoZpl(datos.descripcion);
-  const cantidad = limpiarTextoZpl(String(datos.cantidad));
+export function generarEtiquetaZpl({
+  id_bobina,
+  codigo_etiqueta,
+  descripcion,
+  cantidad,
+  copias = 2,
+}: EtiquetaZebraInput): string {
+  const id = limpiarTexto(id_bobina).toUpperCase();
+  const codigo = limpiarTexto(codigo_etiqueta);
+  const cant = limpiarTexto(cantidad);
+  const descPartida = partirDescripcion(descripcion);
 
-  const lineaDescripcion = `Descripción: ${descripcion}`;
-  const tamano = tamanoDescripcion(lineaDescripcion);
+  const descripcionEnDosLineas = descPartida.linea2.length > 0;
+
+  const bloqueDescripcion = descripcionEnDosLineas
+    ? `
+^FO20,142^A0N,24,24^FDDescripcion: ${descPartida.linea1}^FS
+^FO20,170^A0N,24,24^FD${descPartida.linea2}^FS
+^FO20,198^A0N,30,30^FDCantidad: ${cant}^FS
+`
+    : `
+^FO20,142^A0N,26,26^FDDescripcion: ${descPartida.linea1}^FS
+^FO20,188^A0N,32,32^FDCantidad: ${cant}^FS
+`;
 
   return `
 ^XA
@@ -39,27 +82,14 @@ export function generarEtiquetaZpl(datos: ZebraLabelData) {
 ^LL240
 ^LH0,0
 ^CI28
-^PR4
-~SD15
 
-^FO105,8
-^BY2,2,45
-^BCN,45,Y,N,N
-^FD${id}^FS
+^FO25,8^BY2,2,62^BCN,62,N,N,N^FD${id}^FS
+^FO180,74^A0N,24,24^FD${id}^FS
 
-^FO24,108
-^A0N,28,22
-^FDEtiqueta: ${codigo}^FS
+^FO20,104^A0N,34,34^FDEtiqueta: ${codigo}^FS
+${bloqueDescripcion}
 
-^FO24,150
-^A0N,${tamano.alto},${tamano.ancho}
-^FD${lineaDescripcion}^FS
-
-^FO24,194
-^A0N,28,22
-^FDCantidad: ${cantidad}^FS
-
-^PQ2,0,1,Y
+^PQ${copias}
 ^XZ
 `.trim();
 }
