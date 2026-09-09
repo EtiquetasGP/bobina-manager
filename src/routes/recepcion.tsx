@@ -21,7 +21,7 @@ import { generarEtiquetaZpl } from "@/lib/zebra-label";
 import {
   obtenerImpresoraPredeterminada,
   enviarZpl,
-} from "@/lib/browser-print.client";
+} from "@/lib/browser-print";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -103,31 +103,54 @@ function Recepcion() {
   const [descripcionBloqueada, setDescripcionBloqueada] =
     useState(false);
 
-  const [cantidadBobinas, setCantidadBobinas] = useState("1");
-  const [cantidad, setCantidad] = useState("");
+  const [cantidadBobinas, setCantidadBobinas] =
+    useState("1");
 
-  const [proveedor, setProveedor] = useState("");
-  const [ubicacion, setUbicacion] = useState("");
-  const [operario, setOperario] = useState("");
+  const [cantidad, setCantidad] =
+    useState("");
 
-  const [buscando, setBuscando] = useState(false);
-  const [enviando, setEnviando] = useState(false);
+  const [proveedor, setProveedor] =
+    useState("");
 
-  const [error, setError] = useState<string | null>(null);
-  const [exito, setExito] = useState<Exito | null>(null);
+  const [ubicacion, setUbicacion] =
+    useState("");
 
-  const [imprimiendo, setImprimiendo] = useState(false);
+  const [operario, setOperario] =
+    useState("");
 
-  const [idsImpresos, setIdsImpresos] = useState<string[]>([]);
+  const [buscando, setBuscando] =
+    useState(false);
 
-  const [idsPendientesImpresion, setIdsPendientesImpresion] =
-    useState<string[]>([]);
+  const [enviando, setEnviando] =
+    useState(false);
 
-  const [errorImpresion, setErrorImpresion] =
+  const [error, setError] =
     useState<string | null>(null);
 
-  const codigoActualRef = useRef(codigo);
-  codigoActualRef.current = codigo;
+  const [exito, setExito] =
+    useState<Exito | null>(null);
+
+  const [imprimiendo, setImprimiendo] =
+    useState(false);
+
+  const [idsImpresos, setIdsImpresos] =
+    useState<string[]>([]);
+
+  const [
+    idsPendientesImpresion,
+    setIdsPendientesImpresion,
+  ] = useState<string[]>([]);
+
+  const [
+    errorImpresion,
+    setErrorImpresion,
+  ] = useState<string | null>(null);
+
+  const codigoActualRef =
+    useRef(codigo);
+
+  codigoActualRef.current =
+    codigo;
 
   const limpiar = () => {
     setCodigo("");
@@ -153,287 +176,380 @@ function Recepcion() {
     setErrorImpresion(null);
   };
 
-  const onChangeCodigo = (value: string) => {
+  const onChangeCodigo = (
+    value: string,
+  ) => {
     setCodigo(value);
     setDescripcion("");
     setDescripcionBloqueada(false);
     setError(null);
   };
 
-  const onBlurCodigo = async () => {
-    const valor = codigo.trim();
+  const onBlurCodigo =
+    async () => {
+      const valor =
+        codigo.trim();
 
-    if (!valor) {
-      setDescripcion("");
-      setDescripcionBloqueada(false);
-      return;
-    }
-
-    setBuscando(true);
-    setError(null);
-
-    try {
-      const res = await lookup({
-        data: {
-          codigo_etiqueta: valor,
-        },
-      });
-
-      if (codigoActualRef.current.trim() !== valor) {
+      if (!valor) {
+        setDescripcion("");
+        setDescripcionBloqueada(
+          false,
+        );
         return;
       }
 
-      if (res.existe) {
-        setDescripcion(res.descripcion);
-        setDescripcionBloqueada(true);
-      } else {
-        setDescripcion("");
-        setDescripcionBloqueada(false);
+      setBuscando(true);
+      setError(null);
+
+      try {
+        const res =
+          await lookup({
+            data: {
+              codigo_etiqueta:
+                valor,
+            },
+          });
+
+        if (
+          codigoActualRef.current.trim() !==
+          valor
+        ) {
+          return;
+        }
+
+        if (res.existe) {
+          setDescripcion(
+            res.descripcion,
+          );
+
+          setDescripcionBloqueada(
+            true,
+          );
+        } else {
+          setDescripcion("");
+
+          setDescripcionBloqueada(
+            false,
+          );
+        }
+      } catch (e) {
+        if (
+          codigoActualRef.current.trim() ===
+          valor
+        ) {
+          setError(
+            e instanceof Error
+              ? e.message
+              : "No se pudo consultar la etiqueta.",
+          );
+        }
+      } finally {
+        if (
+          codigoActualRef.current.trim() ===
+          valor
+        ) {
+          setBuscando(false);
+        }
       }
-    } catch (e) {
-      if (codigoActualRef.current.trim() === valor) {
+    };
+
+  const obtenerBobinaParaImprimir =
+    async (
+      idBobina: string,
+    ): Promise<BobinaFicha> => {
+      const res: {
+        bobina:
+          | BobinaFicha
+          | null;
+      } =
+        await consultar({
+          data: {
+            id_bobina:
+              idBobina,
+          },
+        });
+
+      if (!res.bobina) {
+        throw new Error(
+          `No se pudo recuperar la información de ${idBobina}.`,
+        );
+      }
+
+      return res.bobina;
+    };
+
+  const imprimirEtiquetas =
+    async (
+      idsAImprimir: string[],
+    ) => {
+      if (
+        idsAImprimir.length ===
+        0
+      ) {
+        return;
+      }
+
+      if (imprimiendo) {
+        return;
+      }
+
+      setImprimiendo(true);
+      setErrorImpresion(null);
+
+      let idEnProceso = "";
+
+      try {
+        const impresora =
+          await obtenerImpresoraPredeterminada();
+
+        for (
+          const idBobina
+          of idsAImprimir
+        ) {
+          idEnProceso =
+            idBobina;
+
+          const bobina =
+            await obtenerBobinaParaImprimir(
+              idBobina,
+            );
+
+          const zpl =
+            generarEtiquetaZpl({
+              id_bobina:
+                bobina.id_bobina,
+
+              codigo_etiqueta:
+                bobina.codigo_etiqueta ??
+                "",
+
+              descripcion:
+                bobina.descripcion ??
+                "",
+
+              cantidad:
+                bobina.cantidad_actual ??
+                0,
+            });
+
+          await enviarZpl(
+            impresora,
+            zpl,
+          );
+
+          setIdsImpresos(
+            (anteriores) =>
+              anteriores.includes(
+                idBobina,
+              )
+                ? anteriores
+                : [
+                    ...anteriores,
+                    idBobina,
+                  ],
+          );
+
+          setIdsPendientesImpresion(
+            (anteriores) =>
+              anteriores.filter(
+                (id) =>
+                  id !==
+                  idBobina,
+              ),
+          );
+        }
+      } catch (e) {
+        console.error(
+          "Error de impresión Zebra:",
+          e,
+        );
+
+        setErrorImpresion(
+          idEnProceso
+            ? `La recepción quedó registrada, pero la impresión se detuvo en ${idEnProceso}.`
+            : "La recepción quedó registrada, pero no se pudo acceder a la impresora Zebra.",
+        );
+      } finally {
+        setImprimiendo(
+          false,
+        );
+      }
+    };
+
+  const onSubmit =
+    async (
+      event:
+        React.FormEvent,
+    ) => {
+      event.preventDefault();
+
+      if (enviando) {
+        return;
+      }
+
+      setError(null);
+      setErrorImpresion(null);
+
+      const codigoLimpio =
+        codigo.trim();
+
+      const cantidadNum =
+        Number(cantidad);
+
+      const cantidadBobinasNum =
+        Number(
+          cantidadBobinas,
+        );
+
+      if (!codigoLimpio) {
+        return setError(
+          "Ingrese el código de etiqueta.",
+        );
+      }
+
+      if (
+        !descripcion.trim()
+      ) {
+        return setError(
+          "La descripción es obligatoria para un código nuevo.",
+        );
+      }
+
+      if (
+        !Number.isInteger(
+          cantidadBobinasNum,
+        ) ||
+        cantidadBobinasNum <
+          1 ||
+        cantidadBobinasNum >
+          100
+      ) {
+        return setError(
+          "La cantidad de bobinas debe ser un número entero entre 1 y 100.",
+        );
+      }
+
+      if (
+        !Number.isInteger(
+          cantidadNum,
+        ) ||
+        cantidadNum <= 0
+      ) {
+        return setError(
+          "La cantidad por bobina debe ser un número entero positivo.",
+        );
+      }
+
+      setEnviando(true);
+
+      try {
+        const res =
+          await registrar({
+            data: {
+              codigo_etiqueta:
+                codigoLimpio,
+
+              descripcion:
+                descripcion.trim(),
+
+              cantidad:
+                cantidadNum,
+
+              cantidad_bobinas:
+                cantidadBobinasNum,
+
+              proveedor:
+                proveedor.trim(),
+
+              ubicacion:
+                ubicacion.trim(),
+
+              operario:
+                operario.trim(),
+            },
+          });
+
+        if (
+          !res.ok &&
+          res.cantidad_creada ===
+            0
+        ) {
+          setError(
+            res.mensaje,
+          );
+          return;
+        }
+
+        const datosExito: Exito =
+          {
+            ok: res.ok,
+
+            ids_bobinas:
+              res.ids_bobinas,
+
+            cantidad_solicitada:
+              res.cantidad_solicitada,
+
+            cantidad_creada:
+              res.cantidad_creada,
+
+            mensaje:
+              res.mensaje,
+
+            codigo_etiqueta:
+              codigoLimpio,
+
+            descripcion:
+              descripcion.trim(),
+
+            cantidad:
+              String(
+                cantidadNum,
+              ),
+          };
+
+        setExito(
+          datosExito,
+        );
+
+        setIdsImpresos([]);
+
+        setIdsPendientesImpresion(
+          [
+            ...res.ids_bobinas,
+          ],
+        );
+
+        await imprimirEtiquetas(
+          res.ids_bobinas,
+        );
+      } catch (e) {
         setError(
           e instanceof Error
             ? e.message
-            : "No se pudo consultar la etiqueta.",
+            : "No se pudo registrar la recepción.",
         );
+      } finally {
+        setEnviando(false);
       }
-    } finally {
-      if (codigoActualRef.current.trim() === valor) {
-        setBuscando(false);
-      }
-    }
-  };
-
-  const obtenerBobinaParaImprimir = async (
-    idBobina: string,
-  ): Promise<BobinaFicha> => {
-    const res: { bobina: BobinaFicha | null } =
-      await consultar({
-        data: {
-          id_bobina: idBobina,
-        },
-      });
-
-    if (!res.bobina) {
-      throw new Error(
-        `No se pudo recuperar la información de ${idBobina}.`,
-      );
-    }
-
-    return res.bobina;
-  };
-
-  const imprimirEtiquetas = async (
-    idsAImprimir: string[],
-  ) => {
-    if (idsAImprimir.length === 0) return;
-    if (imprimiendo) return;
-
-    setImprimiendo(true);
-    setErrorImpresion(null);
-
-    let idEnProceso = "";
-
-    try {
-      const impresora =
-        await obtenerImpresoraPredeterminada();
-
-      for (const idBobina of idsAImprimir) {
-        idEnProceso = idBobina;
-
-        /*
-         * Recuperamos los datos definitivos desde Supabase.
-         */
-        const bobina =
-          await obtenerBobinaParaImprimir(idBobina);
-
-        /*
-         * El ZPL utiliza ^PQ2:
-         * cada bobina imprime dos stickers iguales.
-         */
-        const zpl = generarEtiquetaZpl({
-          id_bobina: bobina.id_bobina,
-          codigo_etiqueta:
-            bobina.codigo_etiqueta ?? "",
-          descripcion:
-            bobina.descripcion ?? "",
-          cantidad:
-            bobina.cantidad_actual ?? 0,
-        });
-
-        await enviarZpl(
-          impresora,
-          zpl,
-        );
-
-        setIdsImpresos((anteriores) =>
-          anteriores.includes(idBobina)
-            ? anteriores
-            : [...anteriores, idBobina],
-        );
-
-        setIdsPendientesImpresion((anteriores) =>
-          anteriores.filter(
-            (id) => id !== idBobina,
-          ),
-        );
-      }
-    } catch (e) {
-      console.error(
-        "Error de impresión Zebra:",
-        e,
-      );
-
-      setErrorImpresion(
-        idEnProceso
-          ? `La recepción quedó registrada, pero la impresión se detuvo en ${idEnProceso}.`
-          : "La recepción quedó registrada, pero no se pudo acceder a la impresora Zebra.",
-      );
-    } finally {
-      setImprimiendo(false);
-    }
-  };
-
-  const onSubmit = async (
-    event: React.FormEvent,
-  ) => {
-    event.preventDefault();
-
-    if (enviando) return;
-
-    setError(null);
-    setErrorImpresion(null);
-
-    const codigoLimpio = codigo.trim();
-    const cantidadNum = Number(cantidad);
-    const cantidadBobinasNum =
-      Number(cantidadBobinas);
-
-    if (!codigoLimpio) {
-      return setError(
-        "Ingrese el código de etiqueta.",
-      );
-    }
-
-    if (!descripcion.trim()) {
-      return setError(
-        "La descripción es obligatoria para un código nuevo.",
-      );
-    }
-
-    if (
-      !Number.isInteger(cantidadBobinasNum) ||
-      cantidadBobinasNum < 1 ||
-      cantidadBobinasNum > 100
-    ) {
-      return setError(
-        "La cantidad de bobinas debe ser un número entero entre 1 y 100.",
-      );
-    }
-
-    if (
-      !Number.isInteger(cantidadNum) ||
-      cantidadNum <= 0
-    ) {
-      return setError(
-        "La cantidad por bobina debe ser un número entero positivo.",
-      );
-    }
-
-    setEnviando(true);
-
-    try {
-      /*
-       * Primero se crean las bobinas en Supabase.
-       */
-      const res = await registrar({
-        data: {
-          codigo_etiqueta: codigoLimpio,
-          descripcion: descripcion.trim(),
-          cantidad: cantidadNum,
-          cantidad_bobinas:
-            cantidadBobinasNum,
-          proveedor: proveedor.trim(),
-          ubicacion: ubicacion.trim(),
-          operario: operario.trim(),
-        },
-      });
-
-      if (
-        !res.ok &&
-        res.cantidad_creada === 0
-      ) {
-        setError(res.mensaje);
-        return;
-      }
-
-      /*
-       * Guardamos los CQ que realmente fueron creados.
-       */
-      const datosExito: Exito = {
-        ok: res.ok,
-        ids_bobinas: res.ids_bobinas,
-        cantidad_solicitada:
-          res.cantidad_solicitada,
-        cantidad_creada:
-          res.cantidad_creada,
-        mensaje: res.mensaje,
-        codigo_etiqueta:
-          codigoLimpio,
-        descripcion:
-          descripcion.trim(),
-        cantidad:
-          String(cantidadNum),
-      };
-
-      setExito(datosExito);
-
-      /*
-       * Inicialmente todos los CQ creados
-       * necesitan imprimir sus stickers.
-       */
-      setIdsImpresos([]);
-      setIdsPendientesImpresion(
-        [...res.ids_bobinas],
-      );
-
-      /*
-       * Supabase ya terminó.
-       * Ahora comienza la impresión automática.
-       */
-      await imprimirEtiquetas(
-        res.ids_bobinas,
-      );
-    } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "No se pudo registrar la recepción.",
-      );
-    } finally {
-      setEnviando(false);
-    }
-  };
-
-  /*
-   * =====================================================
-   * PANTALLA POST-RECEPCIÓN
-   * =====================================================
-   */
+    };
 
   if (exito) {
     const recepcionParcial =
       !exito.ok;
 
     const esUnaBobina =
-      exito.cantidad_creada === 1;
+      exito.cantidad_creada ===
+      1;
 
     const impresionTerminada =
       !imprimiendo &&
-      idsPendientesImpresion.length === 0 &&
-      idsImpresos.length === exito.cantidad_creada &&
-      exito.cantidad_creada > 0;
+      idsPendientesImpresion.length ===
+        0 &&
+      idsImpresos.length ===
+        exito.cantidad_creada &&
+      exito.cantidad_creada >
+        0;
 
     return (
       <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center px-6 py-10">
@@ -453,13 +569,11 @@ function Recepcion() {
           )}
 
           <h1 className="mt-4 text-2xl font-bold tracking-tight sm:text-3xl">
-
             {recepcionParcial
               ? "RECEPCIÓN PARCIAL"
               : esUnaBobina
                 ? "BOBINA REGISTRADA CORRECTAMENTE"
                 : `${exito.cantidad_creada} BOBINAS REGISTRADAS CORRECTAMENTE`}
-
           </h1>
 
           {recepcionParcial && (
@@ -472,9 +586,7 @@ function Recepcion() {
               </p>
 
               <p className="mt-2 text-sm">
-                No vuelva a registrar la recepción
-                completa sin revisar primero los CQ
-                creados.
+                No vuelva a registrar la recepción completa sin revisar primero los CQ creados.
               </p>
             </div>
           )}
@@ -580,8 +692,6 @@ function Recepcion() {
 
           </dl>
 
-          {/* ESTADO DE IMPRESIÓN */}
-
           <div className="mt-8">
 
             {imprimiendo && (
@@ -599,11 +709,8 @@ function Recepcion() {
                 </p>
 
                 <p className="mt-2 text-sm text-muted-foreground">
-
                   {idsImpresos.length} de{" "}
-                  {exito.cantidad_creada} bobinas
-                  enviadas a la Zebra
-
+                  {exito.cantidad_creada} bobinas enviadas a la Zebra
                 </p>
 
               </div>
@@ -626,8 +733,7 @@ function Recepcion() {
                 </div>
 
                 <p className="mt-2 text-sm">
-                  Se imprimieron 2 stickers por cada
-                  bobina.
+                  Se imprimieron 2 stickers por cada bobina.
                 </p>
 
               </div>
@@ -644,8 +750,7 @@ function Recepcion() {
                 </p>
 
                 <p className="mt-2 text-sm">
-                  Las bobinas YA quedaron registradas
-                  en Supabase. No vuelva a cargarlas.
+                  Las bobinas YA quedaron registradas en Supabase. No vuelva a cargarlas.
                 </p>
 
                 {idsPendientesImpresion.length >
@@ -715,12 +820,6 @@ function Recepcion() {
     );
   }
 
-  /*
-   * =====================================================
-   * FORMULARIO
-   * =====================================================
-   */
-
   const cantidadBobinasVista =
     Number(cantidadBobinas);
 
@@ -744,8 +843,7 @@ function Recepcion() {
       </h1>
 
       <p className="mt-1 text-base text-muted-foreground">
-        Complete los datos una sola vez y defina cuántas
-        bobinas desea ingresar.
+        Complete los datos una sola vez y defina cuántas bobinas desea ingresar.
       </p>
 
       <form
@@ -855,8 +953,7 @@ function Recepcion() {
             />
 
             <p className="text-sm text-muted-foreground">
-              Entre 1 y 100. Cada bobina recibirá un CQ
-              distinto.
+              Entre 1 y 100. Cada bobina recibirá un CQ distinto.
             </p>
 
           </div>
@@ -890,8 +987,7 @@ function Recepcion() {
             />
 
             <p className="text-sm text-muted-foreground">
-              Esta cantidad se asignará a cada bobina
-              creada.
+              Esta cantidad se asignará a cada bobina creada.
             </p>
 
           </div>
