@@ -131,9 +131,11 @@ function Inventario() {
     setNoEncontrada(false);
     try {
       if (valor.toUpperCase().startsWith("CQ-")) {
-        const res: { bobina: BobinaFicha | null } = await consultar({
-          data: { id_bobina: valor },
-        });
+  const idBobina = valor.toUpperCase();
+
+  const res: { bobina: BobinaFicha | null } = await consultar({
+    data: { id_bobina: idBobina },
+  });
         if (!res.bobina) {
           setNoEncontrada(true);
           setEntrada("");
