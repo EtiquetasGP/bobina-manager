@@ -1,80 +1,57 @@
-export type EtiquetaZebraInput = {
+export type ZebraLabelData = {
   id_bobina: string;
   codigo_etiqueta: string;
   descripcion: string;
-  cantidad: string | number;
-  copias?: number;
+  cantidad: number | string;
 };
 
-function limpiarTexto(valor: string | number | null | undefined): string {
-  return String(valor ?? "")
-    .replace(/\r/g, " ")
-    .replace(/\n/g, " ")
+function limpiarTextoZpl(valor: string) {
+  return valor
     .replace(/\^/g, " ")
     .replace(/~/g, " ")
+    .replace(/\r?\n/g, " ")
     .trim();
 }
 
-function partirDescripcion(
-  texto: string,
-  maxLinea1 = 32,
-  maxLinea2 = 32,
-): { linea1: string; linea2: string } {
-  const limpio = limpiarTexto(texto);
+/*
+ * Calcula automáticamente el tamaño de la descripción
+ * para mantenerla SIEMPRE en una sola línea.
+ *
+ * Etiqueta: 70 mm = 559 dots a 203 dpi.
+ * Dejamos aproximadamente 20 dots de margen a cada lado.
+ */
+function calcularTamanoDescripcion(texto: string) {
+  const anchoDisponible = 519;
+  const cantidadCaracteres = Math.max(texto.length, 1);
 
-  if (limpio.length <= maxLinea1) {
-    return {
-      linea1: limpio,
-      linea2: "",
-    };
-  }
+  // Estimación conservadora del ancho permitido por carácter.
+  let ancho = Math.floor(anchoDisponible / cantidadCaracteres);
 
-  const corte1 = limpio.lastIndexOf(" ", maxLinea1);
-  const idx1 = corte1 > 0 ? corte1 : maxLinea1;
+  // Límites para que no quede ni exageradamente grande ni ilegible.
+  ancho = Math.min(ancho, 25);
+  ancho = Math.max(ancho, 9);
 
-  const linea1 = limpio.slice(0, idx1).trim();
-  const resto = limpio.slice(idx1).trim();
+  // La altura puede ser algo mayor que el ancho para conservar legibilidad.
+  let alto = Math.round(ancho * 1.25);
 
-  if (resto.length <= maxLinea2) {
-    return {
-      linea1,
-      linea2: resto,
-    };
-  }
-
-  const corte2 = resto.lastIndexOf(" ", maxLinea2);
-  const idx2 = corte2 > 0 ? corte2 : maxLinea2;
+  alto = Math.min(alto, 30);
+  alto = Math.max(alto, 14);
 
   return {
-    linea1,
-    linea2: resto.slice(0, idx2).trim(),
+    alto,
+    ancho,
   };
 }
 
-export function generarEtiquetaZpl({
-  id_bobina,
-  codigo_etiqueta,
-  descripcion,
-  cantidad,
-  copias = 2,
-}: EtiquetaZebraInput): string {
-  const id = limpiarTexto(id_bobina).toUpperCase();
-  const codigo = limpiarTexto(codigo_etiqueta);
-  const cant = limpiarTexto(cantidad);
-  const descPartida = partirDescripcion(descripcion);
+export function generarEtiquetaZpl(datos: ZebraLabelData) {
+  const id = limpiarTextoZpl(datos.id_bobina).toUpperCase();
+  const codigo = limpiarTextoZpl(datos.codigo_etiqueta);
+  const descripcion = limpiarTextoZpl(datos.descripcion);
+  const cantidad = limpiarTextoZpl(String(datos.cantidad));
 
-  const descripcionEnDosLineas = descPartida.linea2.length > 0;
-
-  const bloqueDescripcion = descripcionEnDosLineas
-    ? `
-^FO20,142^A0N,24,24^FDDescripcion: ${descPartida.linea1}^FS
-^FO20,170^A0N,24,24^FD${descPartida.linea2}^FS
-^FO20,198^A0N,30,30^FDCantidad: ${cant}^FS
-`
-    : `
-^FO20,142^A0N,26,26^FDDescripcion: ${descPartida.linea1}^FS
-^FO20,188^A0N,32,32^FDCantidad: ${cant}^FS
-`;
+  const lineaDescripcion = `Descripción: ${descripcion}`;
+  const tamanoDescripcion =
+    calcularTamanoDescripcion(lineaDescripcion);
 
   return `
 ^XA
@@ -82,14 +59,31 @@ export function generarEtiquetaZpl({
 ^LL240
 ^LH0,0
 ^CI28
+^PR4
+~SD15
 
-^FO25,8^BY2,2,62^BCN,62,N,N,N^FD${id}^FS
-^FO180,74^A0N,24,24^FD${id}^FS
+^FO30,5
+^BY2,2,64
+^BCN,64,N,N,N
+^FD${id}^FS
 
-^FO20,104^A0N,34,34^FDEtiqueta: ${codigo}^FS
-${bloqueDescripcion}
+^FO185,71
+^A0N,25,25
+^FD${id}^FS
 
-^PQ${copias}
+^FO20,104
+^A0N,34,30
+^FDEtiqueta: ${codigo}^FS
+
+^FO20,149
+^A0N,${tamanoDescripcion.alto},${tamanoDescripcion.ancho}
+^FD${lineaDescripcion}^FS
+
+^FO20,194
+^A0N,34,30
+^FDCantidad: ${cantidad}^FS
+
+^PQ2,0,1,Y
 ^XZ
 `.trim();
 }
