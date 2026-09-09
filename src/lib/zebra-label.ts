@@ -14,28 +14,30 @@ function limpiarTextoZpl(valor: string) {
 }
 
 /*
- * Calcula automáticamente el tamaño de la descripción
- * para mantenerla SIEMPRE en una sola línea.
+ * Calcula el tamaño de la descripción para mantenerla
+ * SIEMPRE en una sola línea.
  *
- * Etiqueta: 70 mm = 559 dots a 203 dpi.
- * Dejamos aproximadamente 20 dots de margen a cada lado.
+ * La fuente Zebra A0 no ocupa todo el ancho declarado por carácter.
+ * Usamos un factor aproximado de 0.55 para aprovechar mejor
+ * los 559 dots de una etiqueta de 70 mm a 203 dpi.
  */
 function calcularTamanoDescripcion(texto: string) {
   const anchoDisponible = 519;
-  const cantidadCaracteres = Math.max(texto.length, 1);
+  const caracteres = Math.max(texto.length, 1);
 
-  // Estimación conservadora del ancho permitido por carácter.
-  let ancho = Math.floor(anchoDisponible / cantidadCaracteres);
+  const anchoEstimado = Math.floor(
+    anchoDisponible / (caracteres * 0.55),
+  );
 
-  // Límites para que no quede ni exageradamente grande ni ilegible.
-  ancho = Math.min(ancho, 25);
-  ancho = Math.max(ancho, 9);
+  const ancho = Math.max(
+    11,
+    Math.min(30, anchoEstimado),
+  );
 
-  // La altura puede ser algo mayor que el ancho para conservar legibilidad.
-  let alto = Math.round(ancho * 1.25);
-
-  alto = Math.min(alto, 30);
-  alto = Math.max(alto, 14);
+  const alto = Math.max(
+    18,
+    Math.min(34, Math.round(ancho * 1.15)),
+  );
 
   return {
     alto,
@@ -50,6 +52,7 @@ export function generarEtiquetaZpl(datos: ZebraLabelData) {
   const cantidad = limpiarTextoZpl(String(datos.cantidad));
 
   const lineaDescripcion = `Descripción: ${descripcion}`;
+
   const tamanoDescripcion =
     calcularTamanoDescripcion(lineaDescripcion);
 
@@ -62,25 +65,26 @@ export function generarEtiquetaZpl(datos: ZebraLabelData) {
 ^PR4
 ~SD15
 
-^FO30,5
-^BY2,2,64
-^BCN,64,N,N,N
+^FO38,4
+^BY3,2,62
+^BCN,62,N,N,N
 ^FD${id}^FS
 
-^FO185,71
-^A0N,25,25
+^FO0,69
+^A0N,29,29
+^FB559,1,0,C,0
 ^FD${id}^FS
 
-^FO20,104
-^A0N,34,30
+^FO18,101
+^A0N,38,34
 ^FDEtiqueta: ${codigo}^FS
 
-^FO20,149
+^FO18,146
 ^A0N,${tamanoDescripcion.alto},${tamanoDescripcion.ancho}
 ^FD${lineaDescripcion}^FS
 
-^FO20,194
-^A0N,34,30
+^FO18,193
+^A0N,38,34
 ^FDCantidad: ${cantidad}^FS
 
 ^PQ2,0,1,Y
