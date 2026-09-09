@@ -1,8 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeft, CheckCircle2, Loader2, Printer } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Loader2,
+  Printer,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { generarEtiquetaZpl } from "@/lib/zebra-label";
 
 export const Route = createFileRoute("/prueba-zebra")({
   component: PruebaZebra,
@@ -48,8 +54,13 @@ function cargarScript(src: string, id: string): Promise<void> {
     script.async = false;
 
     script.onload = () => resolve();
+
     script.onerror = () =>
-      reject(new Error(`No se pudo cargar ${src}`));
+      reject(
+        new Error(
+          `No se pudo cargar ${src}`,
+        ),
+      );
 
     document.head.appendChild(script);
   });
@@ -60,9 +71,14 @@ function PruebaZebra() {
   const [buscando, setBuscando] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
 
-  const [impresora, setImpresora] = useState<ZebraDevice | null>(null);
-  const [mensaje, setMensaje] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [impresora, setImpresora] =
+    useState<ZebraDevice | null>(null);
+
+  const [mensaje, setMensaje] =
+    useState<string | null>(null);
+
+  const [error, setError] =
+    useState<string | null>(null);
 
   useEffect(() => {
     const cargarBrowserPrint = async () => {
@@ -83,7 +99,9 @@ function PruebaZebra() {
           );
         }
 
-        setMensaje("Browser Print cargado correctamente.");
+        setMensaje(
+          "Browser Print cargado correctamente.",
+        );
       } catch (e) {
         setError(
           e instanceof Error
@@ -105,7 +123,9 @@ function PruebaZebra() {
 
     if (!window.BrowserPrint) {
       setBuscando(false);
-      setError("Browser Print no está disponible.");
+      setError(
+        "Browser Print no está disponible.",
+      );
       return;
     }
 
@@ -115,17 +135,25 @@ function PruebaZebra() {
         setBuscando(false);
 
         if (!device) {
-          setError("No se encontró una impresora predeterminada.");
+          setError(
+            "No se encontró una impresora predeterminada.",
+          );
           return;
         }
 
         setImpresora(device);
+
         setMensaje(
-          `Impresora detectada: ${device.name ?? device.uid ?? "Zebra"}`,
+          `Impresora detectada: ${
+            device.name ??
+            device.uid ??
+            "Zebra"
+          }`,
         );
       },
       () => {
         setBuscando(false);
+
         setError(
           "No se pudo acceder a la impresora mediante Browser Print.",
         );
@@ -135,37 +163,40 @@ function PruebaZebra() {
 
   const imprimirPrueba = () => {
     if (!impresora) {
-      setError("Primero detecte la impresora.");
+      setError(
+        "Primero detecte la impresora.",
+      );
       return;
     }
+
+    if (imprimiendo) return;
 
     setError(null);
     setMensaje(null);
     setImprimiendo(true);
 
-    const zpl = `
-^XA
-^PW559
-^LL240
-^FO70,60
-^A0N,45,45
-^FDPRUEBA ZEBRA^FS
-^FO90,125
-^A0N,28,28
-^FDGESTION DE BOBINAS^FS
-^PQ1
-^XZ
-`.trim();
+    const zpl = generarEtiquetaZpl({
+      id_bobina: "CQ-999999",
+      codigo_etiqueta: "458721",
+      descripcion: "Trapiche Malbec 750 ml",
+      cantidad: 12500,
+    });
 
     impresora.send(
       zpl,
       () => {
         setImprimiendo(false);
-        setMensaje("Etiqueta de prueba enviada correctamente.");
+
+        setMensaje(
+          "Etiqueta de prueba enviada correctamente. Deben imprimirse 2 stickers iguales.",
+        );
       },
       () => {
         setImprimiendo(false);
-        setError("La Zebra no pudo imprimir la etiqueta de prueba.");
+
+        setError(
+          "La Zebra no pudo imprimir la etiqueta de prueba.",
+        );
       },
     );
   };
@@ -176,7 +207,11 @@ function PruebaZebra() {
         to="/"
         className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
       >
-        <ArrowLeft className="size-4" aria-hidden="true" />
+        <ArrowLeft
+          className="size-4"
+          aria-hidden="true"
+        />
+
         Menú principal
       </Link>
 
@@ -189,12 +224,66 @@ function PruebaZebra() {
       </p>
 
       <div className="mt-8 rounded-xl border border-border bg-card p-6">
+        <div className="mb-6 rounded-lg border border-border bg-background p-5">
+          <p className="text-sm font-semibold uppercase text-muted-foreground">
+            Datos de prueba
+          </p>
+
+          <dl className="mt-3 space-y-2 text-base">
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">
+                ID / Código de barras
+              </dt>
+              <dd className="font-bold">
+                CQ-999999
+              </dd>
+            </div>
+
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">
+                Código de etiqueta
+              </dt>
+              <dd className="font-semibold">
+                458721
+              </dd>
+            </div>
+
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">
+                Descripción
+              </dt>
+              <dd className="text-right font-semibold">
+                Trapiche Malbec 750 ml
+              </dd>
+            </div>
+
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">
+                Cantidad
+              </dt>
+              <dd className="font-semibold">
+                12500
+              </dd>
+            </div>
+
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">
+                Copias
+              </dt>
+              <dd className="font-semibold">
+                2
+              </dd>
+            </div>
+          </dl>
+        </div>
+
         {cargando ? (
           <p className="flex items-center gap-2 text-lg">
             <Loader2
               className="size-5 animate-spin"
               aria-hidden="true"
             />
+
             Cargando Browser Print…
           </p>
         ) : (
@@ -203,7 +292,7 @@ function PruebaZebra() {
               type="button"
               size="lg"
               className="h-16 w-full text-xl font-semibold"
-              disabled={buscando}
+              disabled={buscando || imprimiendo}
               onClick={detectarImpresora}
             >
               {buscando ? (
@@ -212,11 +301,16 @@ function PruebaZebra() {
                     className="size-5 animate-spin"
                     aria-hidden="true"
                   />
+
                   Buscando impresora…
                 </>
               ) : (
                 <>
-                  <Printer className="size-5" aria-hidden="true" />
+                  <Printer
+                    className="size-5"
+                    aria-hidden="true"
+                  />
+
                   DETECTAR IMPRESORA
                 </>
               )}
@@ -236,10 +330,11 @@ function PruebaZebra() {
                       className="size-5 animate-spin"
                       aria-hidden="true"
                     />
+
                     Imprimiendo…
                   </>
                 ) : (
-                  "IMPRIMIR PRUEBA"
+                  "IMPRIMIR ETIQUETA DE PRUEBA"
                 )}
               </Button>
             )}
@@ -252,7 +347,10 @@ function PruebaZebra() {
               className="size-5 text-primary"
               aria-hidden="true"
             />
-            <p className="font-semibold">{mensaje}</p>
+
+            <p className="font-semibold">
+              {mensaje}
+            </p>
           </div>
         )}
 
