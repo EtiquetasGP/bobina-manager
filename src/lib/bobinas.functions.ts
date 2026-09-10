@@ -1,4 +1,4 @@
-import { createServerFn } from "@tanstack/react-start";
+  import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 function lanzarErrorOperativo(error: unknown, mensaje: string): never {
@@ -246,6 +246,10 @@ const altaInventarioSchema = z.object({
   observacion: z.string().trim().max(1000),
 });
 
+const altaInventarioMultipleSchema = altaInventarioSchema.extend({
+  cantidad_bobinas: z.number().int().min(1).max(100),
+});
+
 export const registrarInventarioExistente = createServerFn({
   method: "POST",
 })
@@ -308,5 +312,64 @@ export const registrarAltaInventario = createServerFn({ method: "POST" })
 
     return {
       id_bobina: id as unknown as string,
+    };
+  });
+
+export const registrarAltaInventarioMultiple = createServerFn({
+  method: "POST",
+})
+  .validator((data: unknown) => altaInventarioMultipleSchema.parse(data))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import(
+      "@/integrations/supabase/client.server"
+    );
+
+    const idsBobinas: string[] = [];
+
+    for (let i = 0; i < data.cantidad_bobinas; i++) {
+      const { data: idBobina, error } = await supabaseAdmin.rpc(
+        "registrar_alta_inventario",
+        {
+          p_codigo_etiqueta: data.codigo_etiqueta,
+          p_descripcion: data.descripcion,
+          p_cantidad: data.cantidad,
+          p_fecha_ingreso: data.fecha_ingreso,
+          p_proveedor: data.proveedor || null,
+          p_ubicacion: data.ubicacion || null,
+          p_operario: data.operario || null,
+          p_observacion: data.observacion || null,
+        } as never,
+      );
+
+      if (error) {
+        console.error(
+          `Error en alta múltiple de inventario después de crear ${idsBobinas.length} bobinas.`,
+          error,
+        );
+
+        return {
+          ok: false,
+          ids_bobinas: idsBobinas,
+          cantidad_solicitada: data.cantidad_bobinas,
+          cantidad_creada: idsBobinas.length,
+          mensaje:
+            idsBobinas.length === 0
+              ? "No se pudo dar de alta ninguna bobina. Intente nuevamente."
+              : `Se dieron de alta ${idsBobinas.length} de ${data.cantidad_bobinas} bobinas. No vuelva a registrar el alta completa. Revise los CQ creados antes de continuar.`,
+        };
+      }
+
+      idsBobinas.push(idBobina as unknown as string);
+    }
+
+    return {
+      ok: true,
+      ids_bobinas: idsBobinas,
+      cantidad_solicitada: data.cantidad_bobinas,
+      cantidad_creada: idsBobinas.length,
+      mensaje:
+        data.cantidad_bobinas === 1
+          ? "Bobina dada de alta correctamente."
+          : `${data.cantidad_bobinas} bobinas dadas de alta correctamente.`,
     };
   });
