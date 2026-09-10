@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
 import {
+  AlertTriangle,
   ArrowLeft,
   CheckCircle2,
   Loader2,
@@ -11,7 +12,7 @@ import {
 import {
   buscarEtiqueta,
   consultarBobina,
-  registrarAltaInventario,
+  registrarAltaInventarioMultiple,
   registrarInventarioExistente,
   type BobinaFicha,
 } from "@/lib/bobinas.functions";
@@ -108,12 +109,18 @@ function Fila({
 }
 
 type Exito = {
-  id_bobina: string;
+  ok: boolean;
+  ids_bobinas: string[];
+  cantidad_solicitada: number;
+  cantidad_creada: number;
+  mensaje: string;
+
   codigo_etiqueta: string | null;
   descripcion: string | null;
   cantidad_actual: number | string | null;
   ubicacion: string | null;
   vigencia: string | null;
+
   origen: "existente" | "alta";
 };
 
@@ -132,8 +139,8 @@ function Inventario() {
   const invExistente =
     useServerFn(registrarInventarioExistente);
 
-  const altaInv =
-    useServerFn(registrarAltaInventario);
+  const altaInvMultiple =
+    useServerFn(registrarAltaInventarioMultiple);
 
   const escanerRef =
     useRef<HTMLInputElement>(null);
@@ -173,6 +180,11 @@ function Inventario() {
     setDescripcionBloqueada,
   ] = useState(false);
 
+  const [
+    cantidadBobinas,
+    setCantidadBobinas,
+  ] = useState("1");
+
   const [fechaIngreso, setFechaIngreso] =
     useState("");
 
@@ -192,16 +204,19 @@ function Inventario() {
     useState("");
 
   /*
-   * Estados exclusivos de impresión.
-   * Se utilizan solamente en ALTAS por Inventario.
+   * Estados de impresión.
+   * Solo se utilizan para altas por Inventario.
    */
   const [imprimiendo, setImprimiendo] =
     useState(false);
 
+  const [idsImpresos, setIdsImpresos] =
+    useState<string[]>([]);
+
   const [
-    impresionCompleta,
-    setImpresionCompleta,
-  ] = useState(false);
+    idsPendientesImpresion,
+    setIdsPendientesImpresion,
+  ] = useState<string[]>([]);
 
   const [
     errorImpresion,
@@ -232,6 +247,8 @@ function Inventario() {
     setDescripcion("");
     setDescripcionBloqueada(false);
 
+    setCantidadBobinas("1");
+
     setFechaIngreso("");
     setProveedor("");
 
@@ -241,9 +258,16 @@ function Inventario() {
     setObservacion("");
 
     setImprimiendo(false);
-    setImpresionCompleta(false);
+    setIdsImpresos([]);
+    setIdsPendientesImpresion([]);
     setErrorImpresion(null);
   };
+
+  /*
+   * =====================================================
+   * ESCANEO / IDENTIFICACIÓN
+   * =====================================================
+   */
 
   const procesar = async () => {
     const valor =
@@ -257,8 +281,7 @@ function Inventario() {
 
     try {
       /*
-       * Si comienza con CQ-, buscamos una
-       * bobina YA existente.
+       * Si empieza por CQ-, buscamos una bobina existente.
        */
       if (
         valor
@@ -304,9 +327,8 @@ function Inventario() {
       }
 
       /*
-       * Si NO es CQ, interpretamos el valor
-       * como código de etiqueta de una bobina
-       * que todavía no tiene ID.
+       * Si no es CQ, interpretamos el valor
+       * como código de etiqueta para dar de alta.
        */
       const res =
         await lookup({
@@ -346,6 +368,12 @@ function Inventario() {
     }
   };
 
+  /*
+   * =====================================================
+   * CONSULTAR FICHA ACTUAL
+   * =====================================================
+   */
+
   const recargarFicha =
     async (
       id: string,
@@ -371,19 +399,20 @@ function Inventario() {
 
   /*
    * =====================================================
-   * IMPRESIÓN EXCLUSIVA PARA ALTA DE INVENTARIO
+   * IMPRIMIR ALTAS DE INVENTARIO
    * =====================================================
    *
-   * Esta función NO se llama cuando solamente
-   * ajustamos una bobina ya existente.
+   * Cada CQ se consulta nuevamente en Supabase.
+   * Cada generarEtiquetaZpl() imprime 2 stickers.
    */
-  const imprimirAltaInventario =
+
+  const imprimirAltasInventario =
     async (
-      datos: Exito,
+      idsAImprimir: string[],
     ) => {
       if (
-        datos.origen !==
-        "alta"
+        idsAImprimir.length ===
+        0
       ) {
         return;
       }
@@ -393,55 +422,83 @@ function Inventario() {
       }
 
       setImprimiendo(true);
-      setImpresionCompleta(false);
       setErrorImpresion(null);
+
+      let idEnProceso = "";
 
       try {
         /*
-         * Volvemos a consultar Supabase para imprimir
-         * la información definitiva de la bobina
-         * recién creada.
+         * Detectamos la Zebra una sola vez
+         * para toda la tanda.
          */
-        const ficha =
-          await recargarFicha(
-            datos.id_bobina,
-          );
-
         const impresora =
           await obtenerImpresoraPredeterminada();
 
-        const zpl =
-          generarEtiquetaZpl({
-            id_bobina:
-              datos.id_bobina,
-
-            codigo_etiqueta:
-              ficha?.codigo_etiqueta ??
-              datos.codigo_etiqueta ??
-              "",
-
-            descripcion:
-              ficha?.descripcion ??
-              datos.descripcion ??
-              "",
-
-            cantidad:
-              ficha?.cantidad_actual ??
-              datos.cantidad_actual ??
-              0,
-          });
-
         /*
-         * generarEtiquetaZpl imprime 2 copias.
+         * Imprimimos CQ por CQ.
          */
-        await enviarZpl(
-          impresora,
-          zpl,
-        );
+        for (
+          const idBobina
+          of idsAImprimir
+        ) {
+          idEnProceso =
+            idBobina;
 
-        setImpresionCompleta(
-          true,
-        );
+          const ficha =
+            await recargarFicha(
+              idBobina,
+            );
+
+          if (!ficha) {
+            throw new Error(
+              `No se pudo recuperar ${idBobina}.`,
+            );
+          }
+
+          const zpl =
+            generarEtiquetaZpl({
+              id_bobina:
+                ficha.id_bobina,
+
+              codigo_etiqueta:
+                ficha.codigo_etiqueta ??
+                "",
+
+              descripcion:
+                ficha.descripcion ??
+                "",
+
+              cantidad:
+                ficha.cantidad_actual ??
+                0,
+            });
+
+          await enviarZpl(
+            impresora,
+            zpl,
+          );
+
+          setIdsImpresos(
+            (anteriores) =>
+              anteriores.includes(
+                idBobina,
+              )
+                ? anteriores
+                : [
+                    ...anteriores,
+                    idBobina,
+                  ],
+          );
+
+          setIdsPendientesImpresion(
+            (anteriores) =>
+              anteriores.filter(
+                (id) =>
+                  id !==
+                  idBobina,
+              ),
+          );
+        }
       } catch (e) {
         console.error(
           "Error de impresión Zebra en alta de inventario:",
@@ -449,12 +506,12 @@ function Inventario() {
         );
 
         setErrorImpresion(
-          "La bobina quedó dada de alta correctamente, pero no se pudieron imprimir los stickers.",
+          idEnProceso
+            ? `Las bobinas quedaron dadas de alta, pero la impresión se detuvo en ${idEnProceso}.`
+            : "Las bobinas quedaron dadas de alta, pero no se pudo acceder a la impresora Zebra.",
         );
       } finally {
-        setImprimiendo(
-          false,
-        );
+        setImprimiendo(false);
       }
     };
 
@@ -463,9 +520,9 @@ function Inventario() {
    * INVENTARIO DE BOBINA EXISTENTE
    * =====================================================
    *
-   * Actualiza cantidad/ubicación.
-   * NO imprime stickers.
+   * NO imprime.
    */
+
   const onSubmitExistente =
     async (
       event:
@@ -520,8 +577,20 @@ function Inventario() {
           );
 
         setExito({
-          id_bobina:
+          ok: true,
+
+          ids_bobinas: [
             res.id_bobina,
+          ],
+
+          cantidad_solicitada:
+            1,
+
+          cantidad_creada:
+            1,
+
+          mensaje:
+            "Inventario registrado correctamente.",
 
           codigo_etiqueta:
             ficha?.codigo_etiqueta ??
@@ -551,8 +620,8 @@ function Inventario() {
         });
 
         /*
-         * IMPORTANTE:
-         * Acá NO se imprime nada.
+         * NO imprimimos stickers para un ajuste
+         * de una bobina existente.
          */
       } catch (e) {
         setError(
@@ -567,12 +636,10 @@ function Inventario() {
 
   /*
    * =====================================================
-   * ALTA DE BOBINA POR INVENTARIO
+   * ALTA MÚLTIPLE POR INVENTARIO
    * =====================================================
-   *
-   * Primero Supabase crea la bobina y genera el CQ.
-   * Después imprimimos 2 stickers automáticamente.
    */
+
   const onSubmitAlta =
     async (
       event:
@@ -582,10 +649,14 @@ function Inventario() {
 
       setError(null);
       setErrorImpresion(null);
-      setImpresionCompleta(false);
 
       const cantidadNum =
         Number(cantidad);
+
+      const cantidadBobinasNum =
+        Number(
+          cantidadBobinas,
+        );
 
       if (!codigo.trim()) {
         return setError(
@@ -603,12 +674,24 @@ function Inventario() {
 
       if (
         !Number.isInteger(
+          cantidadBobinasNum,
+        ) ||
+        cantidadBobinasNum < 1 ||
+        cantidadBobinasNum > 100
+      ) {
+        return setError(
+          "La cantidad de bobinas debe ser un número entero entre 1 y 100.",
+        );
+      }
+
+      if (
+        !Number.isInteger(
           cantidadNum,
         ) ||
         cantidadNum <= 0
       ) {
         return setError(
-          "La cantidad contada debe ser un número entero positivo.",
+          "La cantidad por bobina debe ser un número entero positivo.",
         );
       }
 
@@ -622,10 +705,11 @@ function Inventario() {
 
       try {
         /*
-         * PRIMERO: alta real en Supabase.
+         * PRIMERO:
+         * Supabase crea todos los CQ.
          */
         const res =
-          await altaInv({
+          await altaInvMultiple({
             data: {
               codigo_etiqueta:
                 codigo.trim(),
@@ -635,6 +719,9 @@ function Inventario() {
 
               cantidad:
                 cantidadNum,
+
+              cantidad_bobinas:
+                cantidadBobinasNum,
 
               fecha_ingreso:
                 fechaIngreso,
@@ -654,36 +741,68 @@ function Inventario() {
           });
 
         /*
-         * Recuperamos la ficha definitiva.
+         * Si no se creó ninguna,
+         * detenemos todo.
          */
-        const ficha =
-          await recargarFicha(
-            res.id_bobina,
+        if (
+          !res.ok &&
+          res.cantidad_creada ===
+            0
+        ) {
+          setError(
+            res.mensaje,
           );
+
+          return;
+        }
+
+        /*
+         * Recuperamos una ficha como referencia
+         * para mostrar los datos generales.
+         */
+        const primeraFicha =
+          res.ids_bobinas.length >
+          0
+            ? await recargarFicha(
+                res.ids_bobinas[0],
+              )
+            : null;
 
         const datosExito: Exito =
           {
-            id_bobina:
-              res.id_bobina,
+            ok:
+              res.ok,
+
+            ids_bobinas:
+              res.ids_bobinas,
+
+            cantidad_solicitada:
+              res.cantidad_solicitada,
+
+            cantidad_creada:
+              res.cantidad_creada,
+
+            mensaje:
+              res.mensaje,
 
             codigo_etiqueta:
-              ficha?.codigo_etiqueta ??
+              primeraFicha?.codigo_etiqueta ??
               codigo.trim(),
 
             descripcion:
-              ficha?.descripcion ??
+              primeraFicha?.descripcion ??
               descripcion.trim(),
 
             cantidad_actual:
-              ficha?.cantidad_actual ??
+              primeraFicha?.cantidad_actual ??
               cantidadNum,
 
             ubicacion:
-              ficha?.ubicacion ??
+              primeraFicha?.ubicacion ??
               ubicacion.trim(),
 
             vigencia:
-              ficha?.vigencia ??
+              primeraFicha?.vigencia ??
               null,
 
             origen:
@@ -691,29 +810,46 @@ function Inventario() {
           };
 
         /*
-         * La bobina YA EXISTE desde este momento.
+         * A esta altura las bobinas YA EXISTEN.
          */
         setExito(
           datosExito,
         );
 
         /*
-         * SEGUNDO: impresión automática.
-         * Si falla, NO repetimos el alta.
+         * Todas empiezan pendientes de impresión.
          */
-        await imprimirAltaInventario(
-          datosExito,
+        setIdsImpresos([]);
+
+        setIdsPendientesImpresion(
+          [
+            ...res.ids_bobinas,
+          ],
+        );
+
+        /*
+         * SEGUNDO:
+         * imprimimos 2 stickers por cada CQ.
+         */
+        await imprimirAltasInventario(
+          res.ids_bobinas,
         );
       } catch (e) {
         setError(
           e instanceof Error
             ? e.message
-            : "No se pudo dar de alta la bobina.",
+            : "No se pudo dar de alta las bobinas.",
         );
       } finally {
         setEnviando(false);
       }
     };
+
+  /*
+   * =====================================================
+   * COMPONENTES COMUNES
+   * =====================================================
+   */
 
   const volverMenu = (
     <Link
@@ -729,7 +865,10 @@ function Inventario() {
     </Link>
   );
 
-  const camposComunes = (
+  /*
+   * Campos usados en inventario existente.
+   */
+  const camposExistente = (
     <>
       <div className="space-y-2">
 
@@ -844,33 +983,109 @@ function Inventario() {
 
   if (exito) {
     const esAlta =
-      exito.origen === "alta";
+      exito.origen ===
+      "alta";
+
+    const altaParcial =
+      esAlta &&
+      !exito.ok;
+
+    const unaBobina =
+      exito.cantidad_creada ===
+      1;
+
+    const impresionTerminada =
+      esAlta &&
+      !imprimiendo &&
+      idsPendientesImpresion.length ===
+        0 &&
+      idsImpresos.length ===
+        exito.cantidad_creada &&
+      exito.cantidad_creada >
+        0;
 
     return (
       <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center px-6 py-10">
 
         <div className="rounded-xl border border-border bg-card p-8 text-center">
 
-          <CheckCircle2
-            className="mx-auto size-16 text-primary"
-            aria-hidden="true"
-          />
+          {altaParcial ? (
+            <AlertTriangle
+              className="mx-auto size-16 text-destructive"
+              aria-hidden="true"
+            />
+          ) : (
+            <CheckCircle2
+              className="mx-auto size-16 text-primary"
+              aria-hidden="true"
+            />
+          )}
 
           <h1 className="mt-4 text-2xl font-bold tracking-tight sm:text-3xl">
 
-            {esAlta
-              ? "BOBINA DADA DE ALTA CORRECTAMENTE"
-              : "INVENTARIO REGISTRADO CORRECTAMENTE"}
+            {!esAlta
+              ? "INVENTARIO REGISTRADO CORRECTAMENTE"
+              : altaParcial
+                ? "ALTA DE INVENTARIO PARCIAL"
+                : unaBobina
+                  ? "BOBINA DADA DE ALTA CORRECTAMENTE"
+                  : `${exito.cantidad_creada} BOBINAS DADAS DE ALTA CORRECTAMENTE`}
 
           </h1>
 
-          <p className="mt-6 text-sm uppercase text-muted-foreground">
-            ID Bobina
-          </p>
+          {altaParcial && (
+            <div
+              role="alert"
+              className="mt-6 rounded-md bg-destructive/10 p-4 text-left text-destructive"
+            >
 
-          <p className="text-4xl font-bold tabular-nums">
-            {exito.id_bobina}
-          </p>
+              <p className="font-semibold">
+                {exito.mensaje}
+              </p>
+
+              <p className="mt-2 text-sm">
+                No vuelva a cargar el alta completa. Revise los CQ que sí fueron creados.
+              </p>
+
+            </div>
+          )}
+
+          {unaBobina ? (
+            <>
+              <p className="mt-6 text-sm uppercase text-muted-foreground">
+                ID Bobina
+              </p>
+
+              <p className="text-4xl font-bold tabular-nums">
+                {exito.ids_bobinas[0]}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="mt-6 text-sm uppercase text-muted-foreground">
+                IDs de bobinas generados
+              </p>
+
+              <div className="mt-3 max-h-64 overflow-y-auto rounded-lg border border-border bg-background p-4">
+
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+
+                  {exito.ids_bobinas.map(
+                    (id) => (
+                      <div
+                        key={id}
+                        className="rounded-md border border-border px-3 py-2 text-center text-base font-bold tabular-nums"
+                      >
+                        {id}
+                      </div>
+                    ),
+                  )}
+
+                </div>
+
+              </div>
+            </>
+          )}
 
           <dl className="mt-8 text-left text-lg">
 
@@ -889,11 +1104,33 @@ function Inventario() {
             />
 
             <Fila
-              etiqueta="Cantidad actual"
+              etiqueta={
+                esAlta
+                  ? "Cantidad por bobina"
+                  : "Cantidad actual"
+              }
               valor={texto(
                 exito.cantidad_actual,
               )}
             />
+
+            {esAlta && (
+              <>
+                <Fila
+                  etiqueta="Bobinas solicitadas"
+                  valor={
+                    exito.cantidad_solicitada
+                  }
+                />
+
+                <Fila
+                  etiqueta="Bobinas creadas"
+                  valor={
+                    exito.cantidad_creada
+                  }
+                />
+              </>
+            )}
 
             <Fila
               etiqueta="Ubicación"
@@ -912,8 +1149,7 @@ function Inventario() {
           </dl>
 
           {/*
-           * La sección Zebra aparece ÚNICAMENTE
-           * si fue un ALTA por inventario.
+           * IMPRESIÓN SOLO PARA ALTAS
            */}
           {esAlta && (
             <div className="mt-8">
@@ -928,36 +1164,42 @@ function Inventario() {
                       aria-hidden="true"
                     />
 
-                    IMPRIMIENDO 2 STICKERS…
+                    IMPRIMIENDO ETIQUETAS…
+
+                  </p>
+
+                  <p className="mt-2 text-sm text-muted-foreground">
+
+                    {idsImpresos.length} de{" "}
+                    {exito.cantidad_creada} bobinas enviadas a la Zebra
 
                   </p>
 
                 </div>
               )}
 
-              {!imprimiendo &&
-                impresionCompleta && (
-                  <div className="rounded-md bg-primary/10 p-4">
+              {impresionTerminada && (
+                <div className="rounded-md bg-primary/10 p-4">
 
-                    <div className="flex items-center justify-center gap-2">
+                  <div className="flex items-center justify-center gap-2">
 
-                      <Printer
-                        className="size-5 text-primary"
-                        aria-hidden="true"
-                      />
+                    <Printer
+                      className="size-5 text-primary"
+                      aria-hidden="true"
+                    />
 
-                      <p className="font-semibold">
-                        IMPRESIÓN COMPLETADA
-                      </p>
-
-                    </div>
-
-                    <p className="mt-2 text-sm">
-                      Se imprimieron los 2 stickers de la bobina.
+                    <p className="font-semibold">
+                      IMPRESIÓN COMPLETADA
                     </p>
 
                   </div>
-                )}
+
+                  <p className="mt-2 text-sm">
+                    Se imprimieron 2 stickers por cada bobina.
+                  </p>
+
+                </div>
+              )}
 
               {errorImpresion && (
                 <div
@@ -970,32 +1212,35 @@ function Inventario() {
                   </p>
 
                   <p className="mt-2 text-sm">
-                    La bobina ya existe en Supabase. No vuelva a darla de alta.
+                    Las bobinas ya existen en Supabase. No vuelva a darlas de alta.
                   </p>
 
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="lg"
-                    className="mt-4 h-14 w-full text-base"
-                    disabled={
-                      imprimiendo
-                    }
-                    onClick={() =>
-                      void imprimirAltaInventario(
-                        exito,
-                      )
-                    }
-                  >
+                  {idsPendientesImpresion.length >
+                    0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="lg"
+                      className="mt-4 h-14 w-full text-base"
+                      disabled={
+                        imprimiendo
+                      }
+                      onClick={() =>
+                        void imprimirAltasInventario(
+                          idsPendientesImpresion,
+                        )
+                      }
+                    >
 
-                    <Printer
-                      className="mr-2 size-5"
-                      aria-hidden="true"
-                    />
+                      <Printer
+                        className="mr-2 size-5"
+                        aria-hidden="true"
+                      />
 
-                    REIMPRIMIR 2 STICKERS
+                      REIMPRIMIR ETIQUETAS PENDIENTES
 
-                  </Button>
+                    </Button>
+                  )}
 
                 </div>
               )}
@@ -1131,7 +1376,7 @@ function Inventario() {
           className="mt-8 space-y-6"
         >
 
-          {camposComunes}
+          {camposExistente}
 
           {error && (
             <p
@@ -1171,11 +1416,14 @@ function Inventario() {
 
   /*
    * =====================================================
-   * ALTA POR INVENTARIO
+   * ALTA MÚLTIPLE POR INVENTARIO
    * =====================================================
    */
 
   if (modo === "alta") {
+    const cantidadBobinasVista =
+      Number(cantidadBobinas);
+
     return (
       <main className="mx-auto max-w-2xl px-6 py-10">
 
@@ -1254,6 +1502,83 @@ function Inventario() {
             <div className="space-y-2">
 
               <Label
+                htmlFor="cantidad-bobinas"
+                className="text-base"
+              >
+                Cantidad de bobinas
+              </Label>
+
+              <Input
+                id="cantidad-bobinas"
+                className={inputClass}
+                type="number"
+                min={1}
+                max={100}
+                step={1}
+                inputMode="numeric"
+                value={
+                  cantidadBobinas
+                }
+                onChange={(e) =>
+                  setCantidadBobinas(
+                    e.target.value.replace(
+                      /[^0-9]/g,
+                      "",
+                    ),
+                  )
+                }
+                required
+              />
+
+              <p className="text-sm text-muted-foreground">
+                Entre 1 y 100. Cada bobina recibirá un CQ distinto.
+              </p>
+
+            </div>
+
+            <div className="space-y-2">
+
+              <Label
+                htmlFor="cantidad"
+                className="text-base"
+              >
+                Cantidad por bobina
+              </Label>
+
+              <Input
+                id="cantidad"
+                className={inputClass}
+                type="number"
+                min={1}
+                step={1}
+                inputMode="numeric"
+                value={
+                  cantidad
+                }
+                onChange={(e) =>
+                  setCantidad(
+                    e.target.value.replace(
+                      /[^0-9]/g,
+                      "",
+                    ),
+                  )
+                }
+                required
+              />
+
+              <p className="text-sm text-muted-foreground">
+                Esta cantidad se asignará a cada bobina creada.
+              </p>
+
+            </div>
+
+          </div>
+
+          <div className="grid gap-6 sm:grid-cols-2">
+
+            <div className="space-y-2">
+
+              <Label
                 htmlFor="fecha-ingreso"
                 className="text-base"
               >
@@ -1264,7 +1589,9 @@ function Inventario() {
                 id="fecha-ingreso"
                 className={inputClass}
                 type="date"
-                value={fechaIngreso}
+                value={
+                  fechaIngreso
+                }
                 onChange={(e) =>
                   setFechaIngreso(
                     e.target.value,
@@ -1287,7 +1614,9 @@ function Inventario() {
               <Input
                 id="proveedor"
                 className={inputClass}
-                value={proveedor}
+                value={
+                  proveedor
+                }
                 maxLength={200}
                 onChange={(e) =>
                   setProveedor(
@@ -1300,7 +1629,84 @@ function Inventario() {
 
           </div>
 
-          {camposComunes}
+          <div className="grid gap-6 sm:grid-cols-2">
+
+            <div className="space-y-2">
+
+              <Label
+                htmlFor="ubicacion"
+                className="text-base"
+              >
+                Ubicación
+              </Label>
+
+              <Input
+                id="ubicacion"
+                className={inputClass}
+                value={
+                  ubicacion
+                }
+                maxLength={200}
+                onChange={(e) =>
+                  setUbicacion(
+                    e.target.value,
+                  )
+                }
+              />
+
+            </div>
+
+            <div className="space-y-2">
+
+              <Label
+                htmlFor="operario"
+                className="text-base"
+              >
+                Operario
+              </Label>
+
+              <Input
+                id="operario"
+                className={inputClass}
+                value={
+                  operario
+                }
+                maxLength={200}
+                onChange={(e) =>
+                  setOperario(
+                    e.target.value,
+                  )
+                }
+              />
+
+            </div>
+
+          </div>
+
+          <div className="space-y-2">
+
+            <Label
+              htmlFor="observacion"
+              className="text-base"
+            >
+              Observación (opcional)
+            </Label>
+
+            <Input
+              id="observacion"
+              className={inputClass}
+              value={
+                observacion
+              }
+              maxLength={1000}
+              onChange={(e) =>
+                setObservacion(
+                  e.target.value,
+                )
+              }
+            />
+
+          </div>
 
           {error && (
             <p
@@ -1322,7 +1728,13 @@ function Inventario() {
 
             {enviando
               ? "REGISTRANDO…"
-              : "DAR DE ALTA E INVENTARIAR"}
+              : Number.isInteger(
+                    cantidadBobinasVista,
+                  ) &&
+                  cantidadBobinasVista >
+                    1
+                ? `DAR DE ALTA ${cantidadBobinasVista} BOBINAS`
+                : "DAR DE ALTA E INVENTARIAR"}
 
           </Button>
 
@@ -1344,7 +1756,7 @@ function Inventario() {
 
   /*
    * =====================================================
-   * ESCANEO / BÚSQUEDA INICIAL
+   * PANTALLA INICIAL
    * =====================================================
    */
 
@@ -1368,9 +1780,13 @@ function Inventario() {
 
         <Input
           id="entrada"
-          ref={escanerRef}
+          ref={
+            escanerRef
+          }
           className="h-16 text-2xl tracking-wide"
-          value={entrada}
+          value={
+            entrada
+          }
           maxLength={100}
           autoComplete="off"
           placeholder="CQ-000010 o ET-0001"
@@ -1381,7 +1797,8 @@ function Inventario() {
           }
           onKeyDown={(e) => {
             if (
-              e.key === "Enter"
+              e.key ===
+              "Enter"
             ) {
               e.preventDefault();
 
@@ -1407,7 +1824,9 @@ function Inventario() {
           type="button"
           size="lg"
           className="mt-4 h-16 w-full text-xl font-semibold"
-          disabled={buscando}
+          disabled={
+            buscando
+          }
           onClick={() =>
             void procesar()
           }
