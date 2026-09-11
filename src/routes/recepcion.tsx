@@ -26,7 +26,9 @@ import {
 } from "@/lib/bobinas.functions";
 
 import {
+  confirmarRecepcionProveedor,
   listarPreRecepcionesPendientes,
+  type DetalleConfirmacionProveedor,
   type PreRecepcionLinea,
 } from "@/lib/pre-recepciones.functions";
 
@@ -103,6 +105,15 @@ type Exito = {
   cantidad: string;
 };
 
+type ExitoProveedor = {
+  id_envio: string;
+  proveedor: string;
+  numero_remito: string;
+  cantidad_creada: number;
+  ids_bobinas: string[];
+  detalles: DetalleConfirmacionProveedor[];
+};
+
 type Pantalla =
   | "inicio"
   | "manual"
@@ -117,12 +128,15 @@ type EnvioPendiente = {
 
   observacion: string;
 
-  estado: string;
-
   cantidad_productos: number;
-  cantidad_bobinas: number;
+  cantidad_bobinas_pendientes: number;
 
   lineas: PreRecepcionLinea[];
+};
+
+type LineaRecepcionProveedorFormulario = {
+  cantidad_recibida: string;
+  ubicacion: string;
 };
 
 const inputClass = "h-14 text-lg";
@@ -178,9 +192,14 @@ function Recepcion() {
       listarPreRecepcionesPendientes,
     );
 
+  const confirmarProveedor =
+    useServerFn(
+      confirmarRecepcionProveedor,
+    );
+
   /*
    * =====================================================
-   * NAVEGACIÓN INTERNA DE RECEPCIÓN
+   * NAVEGACIÓN
    * =====================================================
    */
 
@@ -202,7 +221,7 @@ function Recepcion() {
 
   /*
    * =====================================================
-   * PRE-RECEPCIONES DE PROVEEDORES
+   * PRE-RECEPCIONES
    * =====================================================
    */
 
@@ -266,11 +285,10 @@ function Recepcion() {
   }, [cargarPendientes]);
 
   /*
-   * Agrupamos todas las líneas que tengan
-   * el mismo id_envio.
+   * Agrupar líneas por envío.
    *
-   * De esta manera un remito con 3 productos
-   * aparece como UNA sola recepción pendiente.
+   * Para una línea parcial mostramos solamente
+   * la cantidad que todavía queda pendiente.
    */
 
   const enviosPendientes =
@@ -285,6 +303,21 @@ function Recepcion() {
         const linea
         of lineasPendientes
       ) {
+        const yaRecibidas =
+          Number(
+            linea.cantidad_bobinas_recibidas ??
+              0,
+          );
+
+        const pendientes =
+          Math.max(
+            0,
+            Number(
+              linea.cantidad_bobinas,
+            ) -
+              yaRecibidas,
+          );
+
         const existente =
           mapa.get(
             linea.id_envio,
@@ -298,10 +331,8 @@ function Recepcion() {
           existente.cantidad_productos +=
             1;
 
-          existente.cantidad_bobinas +=
-            Number(
-              linea.cantidad_bobinas,
-            );
+          existente.cantidad_bobinas_pendientes +=
+            pendientes;
 
           continue;
         }
@@ -324,16 +355,11 @@ function Recepcion() {
             observacion:
               linea.observacion,
 
-            estado:
-              linea.estado,
-
             cantidad_productos:
               1,
 
-            cantidad_bobinas:
-              Number(
-                linea.cantidad_bobinas,
-              ),
+            cantidad_bobinas_pendientes:
+              pendientes,
 
             lineas: [
               linea,
@@ -433,6 +459,54 @@ function Recepcion() {
 
   /*
    * =====================================================
+   * RECEPCIÓN DE PROVEEDOR
+   * =====================================================
+   */
+
+  const [
+    lineasProveedorFormulario,
+    setLineasProveedorFormulario,
+  ] =
+    useState<
+      Record<
+        number,
+        LineaRecepcionProveedorFormulario
+      >
+    >({});
+
+  const [
+    operarioProveedor,
+    setOperarioProveedor,
+  ] =
+    useState("");
+
+  const [
+    enviandoProveedor,
+    setEnviandoProveedor,
+  ] =
+    useState(false);
+
+  const [
+    errorProveedor,
+    setErrorProveedor,
+  ] =
+    useState<string | null>(
+      null,
+    );
+
+  const [
+    exitoProveedor,
+    setExitoProveedor,
+  ] =
+    useState<ExitoProveedor | null>(
+      null,
+    );
+
+  const recepcionProveedorEnCursoRef =
+    useRef(false);
+
+  /*
+   * =====================================================
    * IMPRESIÓN
    * =====================================================
    */
@@ -475,7 +549,7 @@ function Recepcion() {
 
   /*
    * =====================================================
-   * LIMPIEZA RECEPCIÓN MANUAL
+   * LIMPIEZAS
    * =====================================================
    */
 
@@ -515,32 +589,159 @@ function Recepcion() {
     );
   };
 
-  const abrirRecepcionManual =
+  const limpiarProveedor =
     () => {
-      limpiar();
+      recepcionProveedorEnCursoRef.current =
+        false;
 
       setEnvioSeleccionado(
         null,
       );
 
-      setPantalla(
-        "manual",
+      setLineasProveedorFormulario(
+        {},
+      );
+
+      setOperarioProveedor(
+        "",
+      );
+
+      setEnviandoProveedor(
+        false,
+      );
+
+      setErrorProveedor(
+        null,
+      );
+
+      setExitoProveedor(
+        null,
       );
     };
 
   const volverInicio =
     () => {
       limpiar();
-
-      setEnvioSeleccionado(
-        null,
-      );
+      limpiarProveedor();
 
       setPantalla(
         "inicio",
       );
 
       void cargarPendientes();
+    };
+
+  const abrirRecepcionManual =
+    () => {
+      limpiar();
+      limpiarProveedor();
+
+      setPantalla(
+        "manual",
+      );
+    };
+
+  /*
+   * =====================================================
+   * ABRIR ENVÍO DEL PROVEEDOR
+   * =====================================================
+   */
+
+  const abrirEnvioProveedor =
+    (
+      envio: EnvioPendiente,
+    ) => {
+      limpiar();
+
+      recepcionProveedorEnCursoRef.current =
+        false;
+
+      setErrorProveedor(
+        null,
+      );
+
+      setExitoProveedor(
+        null,
+      );
+
+      setOperarioProveedor(
+        "",
+      );
+
+      const formulario: Record<
+        number,
+        LineaRecepcionProveedorFormulario
+      > = {};
+
+      for (
+        const linea
+        of envio.lineas
+      ) {
+        const recibidas =
+          Number(
+            linea.cantidad_bobinas_recibidas ??
+              0,
+          );
+
+        const pendientes =
+          Math.max(
+            0,
+            Number(
+              linea.cantidad_bobinas,
+            ) -
+              recibidas,
+          );
+
+        formulario[
+          linea.id_pre_recepcion
+        ] = {
+          /*
+           * Por defecto proponemos recibir
+           * todo lo pendiente.
+           */
+          cantidad_recibida:
+            String(
+              pendientes,
+            ),
+
+          ubicacion:
+            linea.ubicacion_recepcion ??
+            "",
+        };
+      }
+
+      setLineasProveedorFormulario(
+        formulario,
+      );
+
+      setEnvioSeleccionado(
+        envio,
+      );
+
+      setPantalla(
+        "proveedor",
+      );
+    };
+
+  const actualizarLineaProveedor =
+    (
+      id: number,
+      cambios: Partial<LineaRecepcionProveedorFormulario>,
+    ) => {
+      setLineasProveedorFormulario(
+        (actuales) => ({
+          ...actuales,
+
+          [id]: {
+            ...actuales[id],
+            ...cambios,
+          },
+        }),
+      );
+
+      setErrorProveedor(
+        null,
+      );
     };
 
   /*
@@ -635,7 +836,7 @@ function Recepcion() {
 
   /*
    * =====================================================
-   * CONSULTA BOBINA PARA IMPRESIÓN
+   * CONSULTAR BOBINA PARA IMPRESIÓN
    * =====================================================
    */
 
@@ -952,6 +1153,207 @@ function Recepcion() {
 
   /*
    * =====================================================
+   * CONFIRMAR RECEPCIÓN DEL PROVEEDOR
+   * =====================================================
+   */
+
+  const confirmarEnvioProveedor =
+    async () => {
+      if (
+        !envioSeleccionado
+      ) {
+        return;
+      }
+
+      if (
+        enviandoProveedor ||
+        recepcionProveedorEnCursoRef.current
+      ) {
+        return;
+      }
+
+      setErrorProveedor(
+        null,
+      );
+
+      setErrorImpresion(
+        null,
+      );
+
+      let totalRecibido =
+        0;
+
+      const lineasEnviar =
+        [];
+
+      for (
+        const linea
+        of envioSeleccionado.lineas
+      ) {
+        const formulario =
+          lineasProveedorFormulario[
+            linea.id_pre_recepcion
+          ];
+
+        if (!formulario) {
+          return setErrorProveedor(
+            `Faltan datos para ${linea.codigo_etiqueta}.`,
+          );
+        }
+
+        const cantidadRecibida =
+          Number(
+            formulario.cantidad_recibida,
+          );
+
+        const yaRecibidas =
+          Number(
+            linea.cantidad_bobinas_recibidas ??
+              0,
+          );
+
+        const pendientes =
+          Math.max(
+            0,
+            Number(
+              linea.cantidad_bobinas,
+            ) -
+              yaRecibidas,
+          );
+
+        if (
+          !Number.isInteger(
+            cantidadRecibida,
+          ) ||
+          cantidadRecibida <
+            0
+        ) {
+          return setErrorProveedor(
+            `La cantidad recibida de ${linea.codigo_etiqueta} debe ser un número entero igual o mayor a cero.`,
+          );
+        }
+
+        if (
+          cantidadRecibida >
+          pendientes
+        ) {
+          return setErrorProveedor(
+            `Para ${linea.codigo_etiqueta} quedan ${pendientes} bobinas pendientes.`,
+          );
+        }
+
+        if (
+          cantidadRecibida >
+            0 &&
+          !formulario.ubicacion.trim()
+        ) {
+          return setErrorProveedor(
+            `Ingrese la ubicación para ${linea.codigo_etiqueta}.`,
+          );
+        }
+
+        totalRecibido +=
+          cantidadRecibida;
+
+        lineasEnviar.push({
+          id_pre_recepcion:
+            linea.id_pre_recepcion,
+
+          cantidad_recibida:
+            cantidadRecibida,
+
+          ubicacion:
+            formulario.ubicacion.trim(),
+        });
+      }
+
+      if (
+        totalRecibido ===
+        0
+      ) {
+        return setErrorProveedor(
+          "Debe registrar al menos una bobina recibida.",
+        );
+      }
+
+      recepcionProveedorEnCursoRef.current =
+        true;
+
+      setEnviandoProveedor(
+        true,
+      );
+
+      try {
+        const res =
+          await confirmarProveedor({
+            data: {
+              id_envio:
+                envioSeleccionado.id_envio,
+
+              operario:
+                operarioProveedor.trim(),
+
+              lineas:
+                lineasEnviar,
+            },
+          });
+
+        setExitoProveedor({
+          id_envio:
+            envioSeleccionado.id_envio,
+
+          proveedor:
+            envioSeleccionado.proveedor,
+
+          numero_remito:
+            envioSeleccionado.numero_remito,
+
+          cantidad_creada:
+            res.cantidad_creada,
+
+          ids_bobinas:
+            res.ids_bobinas,
+
+          detalles:
+            res.detalles,
+        });
+
+        /*
+         * Las bobinas YA existen en Supabase
+         * antes de intentar imprimir.
+         */
+
+        setIdsImpresos(
+          [],
+        );
+
+        setIdsPendientesImpresion(
+          [
+            ...res.ids_bobinas,
+          ],
+        );
+
+        await imprimirEtiquetas(
+          res.ids_bobinas,
+        );
+      } catch (e) {
+        recepcionProveedorEnCursoRef.current =
+          false;
+
+        setErrorProveedor(
+          e instanceof Error
+            ? e.message
+            : "No se pudo confirmar la recepción del proveedor.",
+        );
+      } finally {
+        setEnviandoProveedor(
+          false,
+        );
+      }
+    };
+
+  /*
+   * =====================================================
    * ÉXITO RECEPCIÓN MANUAL
    * =====================================================
    */
@@ -1135,10 +1537,8 @@ function Recepcion() {
                 </p>
 
                 <p className="mt-2 text-sm text-muted-foreground">
-
                   {idsImpresos.length} de{" "}
                   {exito.cantidad_creada} bobinas enviadas a la Zebra
-
                 </p>
 
               </div>
@@ -1222,14 +1622,7 @@ function Recepcion() {
                 imprimiendo
               }
               onClick={() => {
-                limpiar();
-
-                setPantalla(
-                  "inicio",
-                );
-
-                void cargarPendientes();
-
+                volverInicio();
                 router.invalidate();
               }}
             >
@@ -1261,7 +1654,281 @@ function Recepcion() {
 
   /*
    * =====================================================
-   * DETALLE PRE-RECEPCIÓN PROVEEDOR
+   * ÉXITO RECEPCIÓN PROVEEDOR
+   * =====================================================
+   */
+
+  if (exitoProveedor) {
+    const quedanPendientes =
+      exitoProveedor.detalles.some(
+        (detalle) =>
+          Number(
+            detalle.cantidad_pendiente,
+          ) > 0,
+      );
+
+    const totalPendiente =
+      exitoProveedor.detalles.reduce(
+        (
+          acumulado,
+          detalle,
+        ) =>
+          acumulado +
+          Number(
+            detalle.cantidad_pendiente,
+          ),
+        0,
+      );
+
+    const impresionTerminada =
+      !imprimiendo &&
+      idsPendientesImpresion.length ===
+        0 &&
+      idsImpresos.length ===
+        exitoProveedor.cantidad_creada &&
+      exitoProveedor.cantidad_creada >
+        0;
+
+    return (
+      <main className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center px-6 py-10">
+
+        <div className="rounded-xl border border-border bg-card p-8 text-center">
+
+          {quedanPendientes ? (
+            <AlertTriangle
+              className="mx-auto size-16 text-primary"
+              aria-hidden="true"
+            />
+          ) : (
+            <CheckCircle2
+              className="mx-auto size-16 text-primary"
+              aria-hidden="true"
+            />
+          )}
+
+          <h1 className="mt-4 text-2xl font-bold tracking-tight sm:text-3xl">
+
+            {quedanPendientes
+              ? "RECEPCIÓN PARCIAL REGISTRADA"
+              : "RECEPCIÓN COMPLETA REGISTRADA"}
+
+          </h1>
+
+          <p className="mt-2 text-base text-muted-foreground">
+
+            {exitoProveedor.proveedor}
+            {" · "}
+            Remito{" "}
+            {exitoProveedor.numero_remito}
+
+          </p>
+
+          <div className="mt-7 rounded-lg bg-muted p-5">
+
+            <p className="text-sm uppercase text-muted-foreground">
+              Bobinas creadas ahora
+            </p>
+
+            <p className="mt-1 text-4xl font-bold">
+              {exitoProveedor.cantidad_creada}
+            </p>
+
+            {quedanPendientes && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Quedan {totalPendiente} bobinas pendientes de recepción.
+              </p>
+            )}
+
+          </div>
+
+          <p className="mt-7 text-sm uppercase text-muted-foreground">
+            CQ generados
+          </p>
+
+          <div className="mt-3 max-h-64 overflow-y-auto rounded-lg border border-border bg-background p-4">
+
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+
+              {exitoProveedor.ids_bobinas.map(
+                (id) => (
+                  <div
+                    key={id}
+                    className="rounded-md border border-border px-3 py-2 text-center text-base font-bold tabular-nums"
+                  >
+                    {id}
+                  </div>
+                ),
+              )}
+
+            </div>
+
+          </div>
+
+          <div className="mt-7 space-y-3 text-left">
+
+            {exitoProveedor.detalles.map(
+              (detalle) => (
+                <div
+                  key={
+                    detalle.id_pre_recepcion
+                  }
+                  className="rounded-lg border border-border p-4"
+                >
+
+                  <p className="font-bold">
+                    {detalle.codigo_etiqueta}
+                  </p>
+
+                  <div className="mt-2 grid gap-1 text-sm text-muted-foreground sm:grid-cols-3">
+
+                    <p>
+                      Recibidas ahora:{" "}
+                      <span className="font-semibold text-foreground">
+                        {detalle.cantidad_recibida_ahora}
+                      </span>
+                    </p>
+
+                    <p>
+                      Recibidas total:{" "}
+                      <span className="font-semibold text-foreground">
+                        {detalle.cantidad_recibida_total}
+                      </span>
+                    </p>
+
+                    <p>
+                      Pendientes:{" "}
+                      <span className="font-semibold text-foreground">
+                        {detalle.cantidad_pendiente}
+                      </span>
+                    </p>
+
+                  </div>
+
+                </div>
+              ),
+            )}
+
+          </div>
+
+          <div className="mt-8">
+
+            {imprimiendo && (
+              <div className="rounded-md border border-border bg-background p-4">
+
+                <p className="flex items-center justify-center gap-2 text-lg font-semibold">
+
+                  <Loader2
+                    className="size-5 animate-spin"
+                    aria-hidden="true"
+                  />
+
+                  IMPRIMIENDO ETIQUETAS…
+
+                </p>
+
+                <p className="mt-2 text-sm text-muted-foreground">
+
+                  {idsImpresos.length} de{" "}
+                  {exitoProveedor.cantidad_creada} bobinas enviadas a la Zebra
+
+                </p>
+
+              </div>
+            )}
+
+            {impresionTerminada && (
+              <div className="rounded-md bg-primary/10 p-4">
+
+                <div className="flex items-center justify-center gap-2">
+
+                  <Printer
+                    className="size-5 text-primary"
+                    aria-hidden="true"
+                  />
+
+                  <p className="font-semibold">
+                    IMPRESIÓN COMPLETADA
+                  </p>
+
+                </div>
+
+                <p className="mt-2 text-sm">
+                  Se imprimieron 2 stickers por cada bobina creada.
+                </p>
+
+              </div>
+            )}
+
+            {errorImpresion && (
+              <div
+                role="alert"
+                className="rounded-md bg-destructive/10 p-4 text-left text-destructive"
+              >
+
+                <p className="font-semibold">
+                  {errorImpresion}
+                </p>
+
+                <p className="mt-2 text-sm">
+                  Las bobinas YA quedaron registradas en Supabase. No vuelva a confirmar esta recepción.
+                </p>
+
+                {idsPendientesImpresion.length >
+                  0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    className="mt-4 h-14 w-full text-base"
+                    disabled={
+                      imprimiendo
+                    }
+                    onClick={() =>
+                      void imprimirEtiquetas(
+                        idsPendientesImpresion,
+                      )
+                    }
+                  >
+
+                    <Printer
+                      className="mr-2 size-5"
+                      aria-hidden="true"
+                    />
+
+                    REIMPRIMIR ETIQUETAS PENDIENTES
+
+                  </Button>
+                )}
+
+              </div>
+            )}
+
+          </div>
+
+          <Button
+            type="button"
+            size="lg"
+            className="mt-8 h-16 w-full text-xl font-semibold"
+            disabled={
+              imprimiendo
+            }
+            onClick={() => {
+              volverInicio();
+              router.invalidate();
+            }}
+          >
+            VOLVER A RECEPCIÓN
+          </Button>
+
+        </div>
+
+      </main>
+    );
+  }
+
+  /*
+   * =====================================================
+   * DETALLE Y CONFIRMACIÓN DE PROVEEDOR
    * =====================================================
    */
 
@@ -1270,6 +1937,37 @@ function Recepcion() {
       "proveedor" &&
     envioSeleccionado
   ) {
+    const totalARecibir =
+      envioSeleccionado.lineas.reduce(
+        (
+          acumulado,
+          linea,
+        ) => {
+          const valor =
+            Number(
+              lineasProveedorFormulario[
+                linea.id_pre_recepcion
+              ]?.cantidad_recibida ??
+                0,
+            );
+
+          if (
+            !Number.isInteger(
+              valor,
+            ) ||
+            valor < 0
+          ) {
+            return acumulado;
+          }
+
+          return (
+            acumulado +
+            valor
+          );
+        },
+        0,
+      );
+
     return (
       <main className="mx-auto max-w-3xl px-6 py-10">
 
@@ -1304,7 +2002,7 @@ function Recepcion() {
             </h1>
 
             <p className="mt-1 text-base text-muted-foreground">
-              Revise los productos declarados por el proveedor.
+              Verifique las bobinas que llegaron físicamente.
             </p>
 
           </div>
@@ -1357,26 +2055,14 @@ function Recepcion() {
 
             </div>
 
-            <div className="flex justify-between gap-4 border-b border-border py-3">
-
-              <dt className="text-muted-foreground">
-                Productos
-              </dt>
-
-              <dd className="font-semibold">
-                {envioSeleccionado.cantidad_productos}
-              </dd>
-
-            </div>
-
             <div className="flex justify-between gap-4 py-3">
 
               <dt className="text-muted-foreground">
-                Bobinas declaradas
+                Bobinas pendientes del envío
               </dt>
 
               <dd className="font-semibold">
-                {envioSeleccionado.cantidad_bobinas}
+                {envioSeleccionado.cantidad_bobinas_pendientes}
               </dd>
 
             </div>
@@ -1399,104 +2085,287 @@ function Recepcion() {
 
         </section>
 
+        <div className="mt-8 space-y-2">
+
+          <Label
+            htmlFor="operario-proveedor"
+            className="text-base"
+          >
+            Operario
+          </Label>
+
+          <Input
+            id="operario-proveedor"
+            className={inputClass}
+            value={
+              operarioProveedor
+            }
+            maxLength={200}
+            onChange={(e) =>
+              setOperarioProveedor(
+                e.target.value,
+              )
+            }
+          />
+
+        </div>
+
         <section className="mt-8">
 
           <h2 className="text-xl font-bold">
             PRODUCTOS DEL ENVÍO
           </h2>
 
-          <div className="mt-4 space-y-4">
+          <div className="mt-4 space-y-5">
 
             {envioSeleccionado.lineas.map(
               (
                 linea,
                 indice,
-              ) => (
-                <div
-                  key={
+              ) => {
+                const yaRecibidas =
+                  Number(
+                    linea.cantidad_bobinas_recibidas ??
+                      0,
+                  );
+
+                const pendientes =
+                  Math.max(
+                    0,
+                    Number(
+                      linea.cantidad_bobinas,
+                    ) -
+                      yaRecibidas,
+                  );
+
+                const formulario =
+                  lineasProveedorFormulario[
                     linea.id_pre_recepcion
-                  }
-                  className="rounded-xl border border-border bg-card p-5"
-                >
+                  ];
 
-                  <div className="flex items-start justify-between gap-4">
+                return (
+                  <div
+                    key={
+                      linea.id_pre_recepcion
+                    }
+                    className="rounded-xl border border-border bg-card p-5"
+                  >
 
-                    <div>
+                    <p className="text-sm font-semibold uppercase text-muted-foreground">
+                      Producto {indice + 1}
+                    </p>
 
-                      <p className="text-sm font-semibold uppercase text-muted-foreground">
-                        Producto {indice + 1}
-                      </p>
+                    <p className="mt-1 text-2xl font-bold">
+                      {linea.codigo_etiqueta}
+                    </p>
 
-                      <p className="mt-1 text-2xl font-bold">
-                        {linea.codigo_etiqueta}
-                      </p>
+                    <p className="mt-1 text-base text-muted-foreground">
+                      {linea.descripcion}
+                    </p>
 
-                      <p className="mt-1 text-base text-muted-foreground">
-                        {linea.descripcion}
-                      </p>
+                    <dl className="mt-5">
+
+                      <div className="flex justify-between gap-4 border-b border-border py-3">
+
+                        <dt className="text-muted-foreground">
+                          Bobinas declaradas
+                        </dt>
+
+                        <dd className="font-semibold">
+                          {linea.cantidad_bobinas}
+                        </dd>
+
+                      </div>
+
+                      <div className="flex justify-between gap-4 border-b border-border py-3">
+
+                        <dt className="text-muted-foreground">
+                          Recibidas anteriormente
+                        </dt>
+
+                        <dd className="font-semibold">
+                          {yaRecibidas}
+                        </dd>
+
+                      </div>
+
+                      <div className="flex justify-between gap-4 border-b border-border py-3">
+
+                        <dt className="text-muted-foreground">
+                          Pendientes
+                        </dt>
+
+                        <dd className="font-semibold">
+                          {pendientes}
+                        </dd>
+
+                      </div>
+
+                      <div className="flex justify-between gap-4 py-3">
+
+                        <dt className="text-muted-foreground">
+                          Cantidad por bobina
+                        </dt>
+
+                        <dd className="font-semibold">
+                          {linea.cantidad_por_bobina}
+                        </dd>
+
+                      </div>
+
+                    </dl>
+
+                    <div className="mt-5 grid gap-5 sm:grid-cols-2">
+
+                      <div className="space-y-2">
+
+                        <Label
+                          htmlFor={`recibidas-${linea.id_pre_recepcion}`}
+                          className="text-base"
+                        >
+                          Bobinas recibidas ahora
+                        </Label>
+
+                        <Input
+                          id={`recibidas-${linea.id_pre_recepcion}`}
+                          className={inputClass}
+                          type="number"
+                          min={0}
+                          max={pendientes}
+                          step={1}
+                          inputMode="numeric"
+                          value={
+                            formulario?.cantidad_recibida ??
+                            ""
+                          }
+                          onChange={(e) =>
+                            actualizarLineaProveedor(
+                              linea.id_pre_recepcion,
+                              {
+                                cantidad_recibida:
+                                  e.target.value.replace(
+                                    /[^0-9]/g,
+                                    "",
+                                  ),
+                              },
+                            )
+                          }
+                        />
+
+                      </div>
+
+                      <div className="space-y-2">
+
+                        <Label
+                          htmlFor={`ubicacion-${linea.id_pre_recepcion}`}
+                          className="text-base"
+                        >
+                          Ubicación
+                        </Label>
+
+                        <Input
+                          id={`ubicacion-${linea.id_pre_recepcion}`}
+                          className={inputClass}
+                          value={
+                            formulario?.ubicacion ??
+                            ""
+                          }
+                          maxLength={200}
+                          onChange={(e) =>
+                            actualizarLineaProveedor(
+                              linea.id_pre_recepcion,
+                              {
+                                ubicacion:
+                                  e.target.value,
+                              },
+                            )
+                          }
+                        />
+
+                      </div>
 
                     </div>
 
                   </div>
-
-                  <dl className="mt-5">
-
-                    <div className="flex justify-between gap-4 border-b border-border py-3">
-
-                      <dt className="text-muted-foreground">
-                        Bobinas declaradas
-                      </dt>
-
-                      <dd className="font-semibold">
-                        {linea.cantidad_bobinas}
-                      </dd>
-
-                    </div>
-
-                    <div className="flex justify-between gap-4 py-3">
-
-                      <dt className="text-muted-foreground">
-                        Cantidad por bobina
-                      </dt>
-
-                      <dd className="font-semibold">
-                        {linea.cantidad_por_bobina}
-                      </dd>
-
-                    </div>
-
-                  </dl>
-
-                </div>
-              ),
+                );
+              },
             )}
 
           </div>
 
         </section>
 
-        <div className="mt-8 rounded-lg border border-border bg-muted/40 p-4">
+        <div className="mt-8 rounded-xl border border-border bg-card p-5">
 
-          <p className="font-semibold">
-            Próximo paso
-          </p>
+          <div className="flex justify-between gap-4 text-lg">
 
-          <p className="mt-1 text-sm text-muted-foreground">
-            En el siguiente desarrollo esta pantalla permitirá ingresar las cantidades realmente recibidas, completar la ubicación y confirmar la recepción para generar los CQ e imprimir los stickers.
+            <span>
+              Bobinas a recibir ahora
+            </span>
+
+            <strong>
+              {totalARecibir}
+            </strong>
+
+          </div>
+
+          <p className="mt-2 text-sm text-muted-foreground">
+            Se generará un CQ independiente por cada bobina recibida y se imprimirán 2 stickers por CQ.
           </p>
 
         </div>
+
+        {errorProveedor && (
+          <p
+            role="alert"
+            className="mt-6 rounded-md bg-destructive/10 p-4 text-base text-destructive"
+          >
+            {errorProveedor}
+          </p>
+        )}
+
+        <Button
+          type="button"
+          size="lg"
+          disabled={
+            enviandoProveedor ||
+            totalARecibir ===
+              0
+          }
+          className="mt-6 h-20 w-full text-2xl font-bold"
+          onClick={() =>
+            void confirmarEnvioProveedor()
+          }
+        >
+
+          {enviandoProveedor ? (
+            <>
+              <Loader2
+                className="size-6 animate-spin"
+                aria-hidden="true"
+              />
+
+              CONFIRMANDO…
+            </>
+          ) : (
+            `CONFIRMAR RECEPCIÓN DE ${totalARecibir} BOBINAS`
+          )}
+
+        </Button>
 
         <Button
           type="button"
           variant="outline"
           size="lg"
-          className="mt-6 h-14 w-full text-base"
+          className="mt-3 h-12 w-full"
+          disabled={
+            enviandoProveedor
+          }
           onClick={
             volverInicio
           }
         >
-          VOLVER A RECEPCIÓN
+          CANCELAR
         </Button>
 
       </main>
@@ -1877,12 +2746,6 @@ function Recepcion() {
         Seleccione el tipo de recepción que desea realizar.
       </p>
 
-      {/*
-       * =================================================
-       * 1. RECEPCIÓN MANUAL
-       * =================================================
-       */}
-
       <section className="mt-8">
 
         <div className="rounded-xl border border-border bg-card p-6">
@@ -1922,12 +2785,6 @@ function Recepcion() {
         </div>
 
       </section>
-
-      {/*
-       * =================================================
-       * 2. RECEPCIONES DE PROVEEDORES
-       * =================================================
-       */}
 
       <section className="mt-10">
 
@@ -2073,13 +2930,23 @@ function Recepcion() {
                         {envio.cantidad_productos ===
                         1
                           ? ""
+                          : "s"}{" "}
+                        pendiente
+                        {envio.cantidad_productos ===
+                        1
+                          ? ""
                           : "s"}
                       </span>
 
                       <span className="rounded-md bg-muted px-3 py-1 text-sm font-semibold">
-                        {envio.cantidad_bobinas}{" "}
+                        {envio.cantidad_bobinas_pendientes}{" "}
                         bobina
-                        {envio.cantidad_bobinas ===
+                        {envio.cantidad_bobinas_pendientes ===
+                        1
+                          ? ""
+                          : "s"}{" "}
+                        pendiente
+                        {envio.cantidad_bobinas_pendientes ===
                         1
                           ? ""
                           : "s"}
@@ -2093,15 +2960,11 @@ function Recepcion() {
                     type="button"
                     size="lg"
                     className="h-14 shrink-0 px-6 text-base font-semibold"
-                    onClick={() => {
-                      setEnvioSeleccionado(
+                    onClick={() =>
+                      abrirEnvioProveedor(
                         envio,
-                      );
-
-                      setPantalla(
-                        "proveedor",
-                      );
-                    }}
+                      )
+                    }
                   >
                     ABRIR RECEPCIÓN
                   </Button>
