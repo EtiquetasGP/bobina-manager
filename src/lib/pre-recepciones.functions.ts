@@ -9,6 +9,12 @@ function lanzarErrorOperativo(
   throw new Error(mensaje);
 }
 
+/*
+ * =====================================================
+ * PRE-RECEPCIÓN: NUEVO ENVÍO DEL PROVEEDOR
+ * =====================================================
+ */
+
 const productoPreRecepcionSchema = z.object({
   codigo_etiqueta: z
     .string()
@@ -95,6 +101,7 @@ export type PreRecepcionLinea = {
   cantidad_bobinas_recibidas: number | null;
   ubicacion_recepcion: string | null;
   fecha_confirmacion: string | null;
+
   created_at: string;
 };
 
@@ -138,12 +145,9 @@ export const registrarPreRecepcionEnvio =
           error,
         );
 
-        /*
-         * Si Supabase devuelve alguno de nuestros
-         * mensajes operativos, intentamos conservarlo.
-         */
         const mensajeSupabase =
-          typeof error.message === "string"
+          typeof error.message ===
+          "string"
             ? error.message
             : "";
 
@@ -178,6 +182,12 @@ export const registrarPreRecepcionEnvio =
           idEnvio as unknown as string,
       };
     });
+
+/*
+ * =====================================================
+ * LISTAR ENVÍOS PENDIENTES / PARCIALES
+ * =====================================================
+ */
 
 export const listarPreRecepcionesPendientes =
   createServerFn({
@@ -234,6 +244,12 @@ export const listarPreRecepcionesPendientes =
           []) as unknown as PreRecepcionLinea[],
     };
   });
+
+/*
+ * =====================================================
+ * CONSULTAR UN ENVÍO
+ * =====================================================
+ */
 
 const envioSchema = z.object({
   id_envio: z
@@ -298,5 +314,215 @@ export const consultarPreRecepcionEnvio =
         lineas:
           (rows ??
             []) as unknown as PreRecepcionLinea[],
+      };
+    });
+
+/*
+ * =====================================================
+ * CONFIRMAR RECEPCIÓN PARCIAL / TOTAL DEL PROVEEDOR
+ * =====================================================
+ */
+
+const lineaConfirmacionSchema = z.object({
+  id_pre_recepcion: z
+    .number()
+    .int()
+    .positive(),
+
+  cantidad_recibida: z
+    .number()
+    .int()
+    .min(0)
+    .max(100),
+
+  ubicacion: z
+    .string()
+    .trim()
+    .max(200),
+});
+
+const confirmarRecepcionProveedorSchema =
+  z.object({
+    id_envio: z
+      .string()
+      .uuid(),
+
+    operario: z
+      .string()
+      .trim()
+      .max(200),
+
+    lineas: z
+      .array(
+        lineaConfirmacionSchema,
+      )
+      .min(1)
+      .max(50),
+  });
+
+export type LineaConfirmacionProveedor = {
+  id_pre_recepcion: number;
+  cantidad_recibida: number;
+  ubicacion: string;
+};
+
+export type DetalleConfirmacionProveedor = {
+  id_pre_recepcion: number;
+
+  codigo_etiqueta: string;
+
+  cantidad_declarada: number;
+
+  cantidad_recibida_antes: number;
+  cantidad_recibida_ahora: number;
+  cantidad_recibida_total: number;
+
+  cantidad_pendiente: number;
+
+  ids_bobinas: string[];
+};
+
+export type ResultadoConfirmacionProveedor = {
+  ok: boolean;
+
+  id_envio: string;
+
+  cantidad_creada: number;
+
+  ids_bobinas: string[];
+
+  detalles:
+    DetalleConfirmacionProveedor[];
+};
+
+export const confirmarRecepcionProveedor =
+  createServerFn({
+    method: "POST",
+  })
+    .validator((data: unknown) =>
+      confirmarRecepcionProveedorSchema.parse(
+        data,
+      ),
+    )
+    .handler(async ({ data }) => {
+      const { supabaseAdmin } =
+        await import(
+          "@/integrations/supabase/client.server"
+        );
+
+      const { data: resultado, error } =
+        await supabaseAdmin.rpc(
+          "confirmar_recepcion_proveedor",
+          {
+            p_id_envio:
+              data.id_envio,
+
+            p_operario:
+              data.operario ||
+              null,
+
+            p_lineas:
+              data.lineas,
+          } as never,
+        );
+
+      if (error) {
+        console.error(
+          "Error confirmando recepción de proveedor:",
+          error,
+        );
+
+        const mensajeSupabase =
+          typeof error.message ===
+          "string"
+            ? error.message
+            : "";
+
+        /*
+         * Conservamos los mensajes operativos
+         * generados por nuestra función SQL.
+         */
+
+        if (
+          mensajeSupabase.includes(
+            "quedan",
+          ) &&
+          mensajeSupabase.includes(
+            "bobinas pendientes",
+          )
+        ) {
+          throw new Error(
+            mensajeSupabase,
+          );
+        }
+
+        if (
+          mensajeSupabase.includes(
+            "ya fue recibido completamente",
+          )
+        ) {
+          throw new Error(
+            mensajeSupabase,
+          );
+        }
+
+        if (
+          mensajeSupabase.includes(
+            "Debe indicar la ubicación",
+          )
+        ) {
+          throw new Error(
+            mensajeSupabase,
+          );
+        }
+
+        if (
+          mensajeSupabase.includes(
+            "Debe registrar al menos una bobina recibida",
+          )
+        ) {
+          throw new Error(
+            "Debe registrar al menos una bobina recibida.",
+          );
+        }
+
+        if (
+          mensajeSupabase.includes(
+            "No se encontró",
+          )
+        ) {
+          throw new Error(
+            mensajeSupabase,
+          );
+        }
+
+        lanzarErrorOperativo(
+          error,
+          "No se pudo confirmar la recepción del proveedor. Intente nuevamente.",
+        );
+      }
+
+      const datos =
+        resultado as unknown as ResultadoConfirmacionProveedor;
+
+      return {
+        ok:
+          datos.ok,
+
+        id_envio:
+          datos.id_envio,
+
+        cantidad_creada:
+          Number(
+            datos.cantidad_creada,
+          ),
+
+        ids_bobinas:
+          datos.ids_bobinas ??
+          [],
+
+        detalles:
+          datos.detalles ??
+          [],
       };
     });
