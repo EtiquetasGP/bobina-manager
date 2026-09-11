@@ -1,12 +1,21 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
+  ClipboardPlus,
   Loader2,
+  PackageOpen,
   Printer,
+  RefreshCw,
 } from "lucide-react";
 
 import {
@@ -15,6 +24,11 @@ import {
   registrarRecepcionMultiple,
   type BobinaFicha,
 } from "@/lib/bobinas.functions";
+
+import {
+  listarPreRecepcionesPendientes,
+  type PreRecepcionLinea,
+} from "@/lib/pre-recepciones.functions";
 
 import { generarEtiquetaZpl } from "@/lib/zebra-label";
 
@@ -89,62 +103,369 @@ type Exito = {
   cantidad: string;
 };
 
+type Pantalla =
+  | "inicio"
+  | "manual"
+  | "proveedor";
+
+type EnvioPendiente = {
+  id_envio: string;
+
+  proveedor: string;
+  numero_remito: string;
+  fecha_despacho: string;
+
+  observacion: string;
+
+  estado: string;
+
+  cantidad_productos: number;
+  cantidad_bobinas: number;
+
+  lineas: PreRecepcionLinea[];
+};
+
 const inputClass = "h-14 text-lg";
 
+function formatearFecha(
+  fecha: string,
+) {
+  const partes =
+    fecha
+      .slice(0, 10)
+      .split("-");
+
+  if (partes.length !== 3) {
+    return fecha;
+  }
+
+  const [
+    anio,
+    mes,
+    dia,
+  ] = partes;
+
+  return `${dia}/${mes}/${anio}`;
+}
+
 function Recepcion() {
-  const router = useRouter();
+  const router =
+    useRouter();
 
-  const lookup = useServerFn(buscarEtiqueta);
-  const consultar = useServerFn(consultarBobina);
-  const registrar = useServerFn(registrarRecepcionMultiple);
+  /*
+   * =====================================================
+   * FUNCIONES DE SERVIDOR
+   * =====================================================
+   */
 
-  const [codigo, setCodigo] = useState("");
-  const [descripcion, setDescripcion] = useState("");
-  const [descripcionBloqueada, setDescripcionBloqueada] =
+  const lookup =
+    useServerFn(
+      buscarEtiqueta,
+    );
+
+  const consultar =
+    useServerFn(
+      consultarBobina,
+    );
+
+  const registrar =
+    useServerFn(
+      registrarRecepcionMultiple,
+    );
+
+  const listarPendientes =
+    useServerFn(
+      listarPreRecepcionesPendientes,
+    );
+
+  /*
+   * =====================================================
+   * NAVEGACIÓN INTERNA DE RECEPCIÓN
+   * =====================================================
+   */
+
+  const [
+    pantalla,
+    setPantalla,
+  ] =
+    useState<Pantalla>(
+      "inicio",
+    );
+
+  const [
+    envioSeleccionado,
+    setEnvioSeleccionado,
+  ] =
+    useState<EnvioPendiente | null>(
+      null,
+    );
+
+  /*
+   * =====================================================
+   * PRE-RECEPCIONES DE PROVEEDORES
+   * =====================================================
+   */
+
+  const [
+    lineasPendientes,
+    setLineasPendientes,
+  ] =
+    useState<
+      PreRecepcionLinea[]
+    >([]);
+
+  const [
+    cargandoPendientes,
+    setCargandoPendientes,
+  ] =
     useState(false);
 
-  const [cantidadBobinas, setCantidadBobinas] =
+  const [
+    errorPendientes,
+    setErrorPendientes,
+  ] =
+    useState<string | null>(
+      null,
+    );
+
+  const cargarPendientes =
+    useCallback(
+      async () => {
+        setCargandoPendientes(
+          true,
+        );
+
+        setErrorPendientes(
+          null,
+        );
+
+        try {
+          const res =
+            await listarPendientes();
+
+          setLineasPendientes(
+            res.lineas,
+          );
+        } catch (e) {
+          setErrorPendientes(
+            e instanceof Error
+              ? e.message
+              : "No se pudieron consultar las recepciones pendientes.",
+          );
+        } finally {
+          setCargandoPendientes(
+            false,
+          );
+        }
+      },
+      [listarPendientes],
+    );
+
+  useEffect(() => {
+    void cargarPendientes();
+  }, [cargarPendientes]);
+
+  /*
+   * Agrupamos todas las líneas que tengan
+   * el mismo id_envio.
+   *
+   * De esta manera un remito con 3 productos
+   * aparece como UNA sola recepción pendiente.
+   */
+
+  const enviosPendientes =
+    useMemo(() => {
+      const mapa =
+        new Map<
+          string,
+          EnvioPendiente
+        >();
+
+      for (
+        const linea
+        of lineasPendientes
+      ) {
+        const existente =
+          mapa.get(
+            linea.id_envio,
+          );
+
+        if (existente) {
+          existente.lineas.push(
+            linea,
+          );
+
+          existente.cantidad_productos +=
+            1;
+
+          existente.cantidad_bobinas +=
+            Number(
+              linea.cantidad_bobinas,
+            );
+
+          continue;
+        }
+
+        mapa.set(
+          linea.id_envio,
+          {
+            id_envio:
+              linea.id_envio,
+
+            proveedor:
+              linea.proveedor,
+
+            numero_remito:
+              linea.numero_remito,
+
+            fecha_despacho:
+              linea.fecha_despacho,
+
+            observacion:
+              linea.observacion,
+
+            estado:
+              linea.estado,
+
+            cantidad_productos:
+              1,
+
+            cantidad_bobinas:
+              Number(
+                linea.cantidad_bobinas,
+              ),
+
+            lineas: [
+              linea,
+            ],
+          },
+        );
+      }
+
+      return Array.from(
+        mapa.values(),
+      );
+    }, [
+      lineasPendientes,
+    ]);
+
+  /*
+   * =====================================================
+   * RECEPCIÓN MANUAL
+   * =====================================================
+   */
+
+  const [
+    codigo,
+    setCodigo,
+  ] =
+    useState("");
+
+  const [
+    descripcion,
+    setDescripcion,
+  ] =
+    useState("");
+
+  const [
+    descripcionBloqueada,
+    setDescripcionBloqueada,
+  ] =
+    useState(false);
+
+  const [
+    cantidadBobinas,
+    setCantidadBobinas,
+  ] =
     useState("1");
 
-  const [cantidad, setCantidad] =
+  const [
+    cantidad,
+    setCantidad,
+  ] =
     useState("");
 
-  const [proveedor, setProveedor] =
+  const [
+    proveedor,
+    setProveedor,
+  ] =
     useState("");
 
-  const [ubicacion, setUbicacion] =
+  const [
+    ubicacion,
+    setUbicacion,
+  ] =
     useState("");
 
-  const [operario, setOperario] =
+  const [
+    operario,
+    setOperario,
+  ] =
     useState("");
 
-  const [buscando, setBuscando] =
+  const [
+    buscando,
+    setBuscando,
+  ] =
     useState(false);
 
-  const [enviando, setEnviando] =
+  const [
+    enviando,
+    setEnviando,
+  ] =
     useState(false);
 
-  const [error, setError] =
-    useState<string | null>(null);
+  const [
+    error,
+    setError,
+  ] =
+    useState<string | null>(
+      null,
+    );
 
-  const [exito, setExito] =
-    useState<Exito | null>(null);
+  const [
+    exito,
+    setExito,
+  ] =
+    useState<Exito | null>(
+      null,
+    );
 
-  const [imprimiendo, setImprimiendo] =
+  /*
+   * =====================================================
+   * IMPRESIÓN
+   * =====================================================
+   */
+
+  const [
+    imprimiendo,
+    setImprimiendo,
+  ] =
     useState(false);
 
-  const [idsImpresos, setIdsImpresos] =
-    useState<string[]>([]);
+  const [
+    idsImpresos,
+    setIdsImpresos,
+  ] =
+    useState<string[]>(
+      [],
+    );
 
   const [
     idsPendientesImpresion,
     setIdsPendientesImpresion,
-  ] = useState<string[]>([]);
+  ] =
+    useState<string[]>(
+      [],
+    );
 
   const [
     errorImpresion,
     setErrorImpresion,
-  ] = useState<string | null>(null);
+  ] =
+    useState<string | null>(
+      null,
+    );
 
   const codigoActualRef =
     useRef(codigo);
@@ -152,12 +473,23 @@ function Recepcion() {
   codigoActualRef.current =
     codigo;
 
+  /*
+   * =====================================================
+   * LIMPIEZA RECEPCIÓN MANUAL
+   * =====================================================
+   */
+
   const limpiar = () => {
     setCodigo("");
     setDescripcion("");
-    setDescripcionBloqueada(false);
+    setDescripcionBloqueada(
+      false,
+    );
 
-    setCantidadBobinas("1");
+    setCantidadBobinas(
+      "1",
+    );
+
     setCantidad("");
 
     setProveedor("");
@@ -171,17 +503,63 @@ function Recepcion() {
     setExito(null);
 
     setImprimiendo(false);
+
     setIdsImpresos([]);
-    setIdsPendientesImpresion([]);
-    setErrorImpresion(null);
+
+    setIdsPendientesImpresion(
+      [],
+    );
+
+    setErrorImpresion(
+      null,
+    );
   };
+
+  const abrirRecepcionManual =
+    () => {
+      limpiar();
+
+      setEnvioSeleccionado(
+        null,
+      );
+
+      setPantalla(
+        "manual",
+      );
+    };
+
+  const volverInicio =
+    () => {
+      limpiar();
+
+      setEnvioSeleccionado(
+        null,
+      );
+
+      setPantalla(
+        "inicio",
+      );
+
+      void cargarPendientes();
+    };
+
+  /*
+   * =====================================================
+   * BÚSQUEDA CÓDIGO RECEPCIÓN MANUAL
+   * =====================================================
+   */
 
   const onChangeCodigo = (
     value: string,
   ) => {
     setCodigo(value);
+
     setDescripcion("");
-    setDescripcionBloqueada(false);
+
+    setDescripcionBloqueada(
+      false,
+    );
+
     setError(null);
   };
 
@@ -192,9 +570,11 @@ function Recepcion() {
 
       if (!valor) {
         setDescripcion("");
+
         setDescripcionBloqueada(
           false,
         );
+
         return;
       }
 
@@ -253,6 +633,12 @@ function Recepcion() {
       }
     };
 
+  /*
+   * =====================================================
+   * CONSULTA BOBINA PARA IMPRESIÓN
+   * =====================================================
+   */
+
   const obtenerBobinaParaImprimir =
     async (
       idBobina: string,
@@ -278,6 +664,12 @@ function Recepcion() {
       return res.bobina;
     };
 
+  /*
+   * =====================================================
+   * IMPRESIÓN ZEBRA
+   * =====================================================
+   */
+
   const imprimirEtiquetas =
     async (
       idsAImprimir: string[],
@@ -293,10 +685,16 @@ function Recepcion() {
         return;
       }
 
-      setImprimiendo(true);
-      setErrorImpresion(null);
+      setImprimiendo(
+        true,
+      );
 
-      let idEnProceso = "";
+      setErrorImpresion(
+        null,
+      );
+
+      let idEnProceso =
+        "";
 
       try {
         const impresora =
@@ -338,7 +736,9 @@ function Recepcion() {
           );
 
           setIdsImpresos(
-            (anteriores) =>
+            (
+              anteriores,
+            ) =>
               anteriores.includes(
                 idBobina,
               )
@@ -350,7 +750,9 @@ function Recepcion() {
           );
 
           setIdsPendientesImpresion(
-            (anteriores) =>
+            (
+              anteriores,
+            ) =>
               anteriores.filter(
                 (id) =>
                   id !==
@@ -376,6 +778,12 @@ function Recepcion() {
       }
     };
 
+  /*
+   * =====================================================
+   * REGISTRAR RECEPCIÓN MANUAL
+   * =====================================================
+   */
+
   const onSubmit =
     async (
       event:
@@ -388,7 +796,10 @@ function Recepcion() {
       }
 
       setError(null);
-      setErrorImpresion(null);
+
+      setErrorImpresion(
+        null,
+      );
 
       const codigoLimpio =
         codigo.trim();
@@ -477,6 +888,7 @@ function Recepcion() {
           setError(
             res.mensaje,
           );
+
           return;
         }
 
@@ -512,7 +924,9 @@ function Recepcion() {
           datosExito,
         );
 
-        setIdsImpresos([]);
+        setIdsImpresos(
+          [],
+        );
 
         setIdsPendientesImpresion(
           [
@@ -530,9 +944,17 @@ function Recepcion() {
             : "No se pudo registrar la recepción.",
         );
       } finally {
-        setEnviando(false);
+        setEnviando(
+          false,
+        );
       }
     };
+
+  /*
+   * =====================================================
+   * ÉXITO RECEPCIÓN MANUAL
+   * =====================================================
+   */
 
   if (exito) {
     const recepcionParcial =
@@ -569,11 +991,13 @@ function Recepcion() {
           )}
 
           <h1 className="mt-4 text-2xl font-bold tracking-tight sm:text-3xl">
+
             {recepcionParcial
               ? "RECEPCIÓN PARCIAL"
               : esUnaBobina
                 ? "BOBINA REGISTRADA CORRECTAMENTE"
                 : `${exito.cantidad_creada} BOBINAS REGISTRADAS CORRECTAMENTE`}
+
           </h1>
 
           {recepcionParcial && (
@@ -581,6 +1005,7 @@ function Recepcion() {
               role="alert"
               className="mt-6 rounded-md bg-destructive/10 p-4 text-left text-destructive"
             >
+
               <p className="font-semibold">
                 {exito.mensaje}
               </p>
@@ -588,6 +1013,7 @@ function Recepcion() {
               <p className="mt-2 text-sm">
                 No vuelva a registrar la recepción completa sin revisar primero los CQ creados.
               </p>
+
             </div>
           )}
 
@@ -709,8 +1135,10 @@ function Recepcion() {
                 </p>
 
                 <p className="mt-2 text-sm text-muted-foreground">
+
                   {idsImpresos.length} de{" "}
                   {exito.cantidad_creada} bobinas enviadas a la Zebra
+
                 </p>
 
               </div>
@@ -760,7 +1188,9 @@ function Recepcion() {
                     variant="outline"
                     size="lg"
                     className="mt-4 h-14 w-full text-base"
-                    disabled={imprimiendo}
+                    disabled={
+                      imprimiendo
+                    }
                     onClick={() =>
                       void imprimirEtiquetas(
                         idsPendientesImpresion,
@@ -788,9 +1218,18 @@ function Recepcion() {
             <Button
               size="lg"
               className="h-16 text-xl font-semibold"
-              disabled={imprimiendo}
+              disabled={
+                imprimiendo
+              }
               onClick={() => {
                 limpiar();
+
+                setPantalla(
+                  "inicio",
+                );
+
+                void cargarPendientes();
+
                 router.invalidate();
               }}
             >
@@ -820,22 +1259,614 @@ function Recepcion() {
     );
   }
 
-  const cantidadBobinasVista =
-    Number(cantidadBobinas);
+  /*
+   * =====================================================
+   * DETALLE PRE-RECEPCIÓN PROVEEDOR
+   * =====================================================
+   */
+
+  if (
+    pantalla ===
+      "proveedor" &&
+    envioSeleccionado
+  ) {
+    return (
+      <main className="mx-auto max-w-3xl px-6 py-10">
+
+        <button
+          type="button"
+          className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+          onClick={
+            volverInicio
+          }
+        >
+
+          <ArrowLeft
+            className="size-4"
+            aria-hidden="true"
+          />
+
+          Volver a Recepción
+
+        </button>
+
+        <div className="mt-6 flex items-start gap-4">
+
+          <PackageOpen
+            className="mt-1 size-9 shrink-0"
+            aria-hidden="true"
+          />
+
+          <div>
+
+            <h1 className="text-3xl font-bold tracking-tight">
+              RECEPCIÓN DE PROVEEDOR
+            </h1>
+
+            <p className="mt-1 text-base text-muted-foreground">
+              Revise los productos declarados por el proveedor.
+            </p>
+
+          </div>
+
+        </div>
+
+        <section className="mt-8 rounded-xl border border-border bg-card p-5">
+
+          <h2 className="text-lg font-bold">
+            DATOS DEL ENVÍO
+          </h2>
+
+          <dl className="mt-4 text-base">
+
+            <div className="flex justify-between gap-4 border-b border-border py-3">
+
+              <dt className="text-muted-foreground">
+                Proveedor
+              </dt>
+
+              <dd className="text-right font-semibold">
+                {envioSeleccionado.proveedor}
+              </dd>
+
+            </div>
+
+            <div className="flex justify-between gap-4 border-b border-border py-3">
+
+              <dt className="text-muted-foreground">
+                N.º de remito
+              </dt>
+
+              <dd className="text-right font-semibold">
+                {envioSeleccionado.numero_remito}
+              </dd>
+
+            </div>
+
+            <div className="flex justify-between gap-4 border-b border-border py-3">
+
+              <dt className="text-muted-foreground">
+                Fecha de despacho
+              </dt>
+
+              <dd className="text-right font-semibold">
+                {formatearFecha(
+                  envioSeleccionado.fecha_despacho,
+                )}
+              </dd>
+
+            </div>
+
+            <div className="flex justify-between gap-4 border-b border-border py-3">
+
+              <dt className="text-muted-foreground">
+                Productos
+              </dt>
+
+              <dd className="font-semibold">
+                {envioSeleccionado.cantidad_productos}
+              </dd>
+
+            </div>
+
+            <div className="flex justify-between gap-4 py-3">
+
+              <dt className="text-muted-foreground">
+                Bobinas declaradas
+              </dt>
+
+              <dd className="font-semibold">
+                {envioSeleccionado.cantidad_bobinas}
+              </dd>
+
+            </div>
+
+          </dl>
+
+          {envioSeleccionado.observacion && (
+            <div className="mt-4 rounded-lg bg-muted p-4">
+
+              <p className="text-sm font-semibold">
+                Observación del proveedor
+              </p>
+
+              <p className="mt-1 text-base">
+                {envioSeleccionado.observacion}
+              </p>
+
+            </div>
+          )}
+
+        </section>
+
+        <section className="mt-8">
+
+          <h2 className="text-xl font-bold">
+            PRODUCTOS DEL ENVÍO
+          </h2>
+
+          <div className="mt-4 space-y-4">
+
+            {envioSeleccionado.lineas.map(
+              (
+                linea,
+                indice,
+              ) => (
+                <div
+                  key={
+                    linea.id_pre_recepcion
+                  }
+                  className="rounded-xl border border-border bg-card p-5"
+                >
+
+                  <div className="flex items-start justify-between gap-4">
+
+                    <div>
+
+                      <p className="text-sm font-semibold uppercase text-muted-foreground">
+                        Producto {indice + 1}
+                      </p>
+
+                      <p className="mt-1 text-2xl font-bold">
+                        {linea.codigo_etiqueta}
+                      </p>
+
+                      <p className="mt-1 text-base text-muted-foreground">
+                        {linea.descripcion}
+                      </p>
+
+                    </div>
+
+                  </div>
+
+                  <dl className="mt-5">
+
+                    <div className="flex justify-between gap-4 border-b border-border py-3">
+
+                      <dt className="text-muted-foreground">
+                        Bobinas declaradas
+                      </dt>
+
+                      <dd className="font-semibold">
+                        {linea.cantidad_bobinas}
+                      </dd>
+
+                    </div>
+
+                    <div className="flex justify-between gap-4 py-3">
+
+                      <dt className="text-muted-foreground">
+                        Cantidad por bobina
+                      </dt>
+
+                      <dd className="font-semibold">
+                        {linea.cantidad_por_bobina}
+                      </dd>
+
+                    </div>
+
+                  </dl>
+
+                </div>
+              ),
+            )}
+
+          </div>
+
+        </section>
+
+        <div className="mt-8 rounded-lg border border-border bg-muted/40 p-4">
+
+          <p className="font-semibold">
+            Próximo paso
+          </p>
+
+          <p className="mt-1 text-sm text-muted-foreground">
+            En el siguiente desarrollo esta pantalla permitirá ingresar las cantidades realmente recibidas, completar la ubicación y confirmar la recepción para generar los CQ e imprimir los stickers.
+          </p>
+
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="lg"
+          className="mt-6 h-14 w-full text-base"
+          onClick={
+            volverInicio
+          }
+        >
+          VOLVER A RECEPCIÓN
+        </Button>
+
+      </main>
+    );
+  }
+
+  /*
+   * =====================================================
+   * RECEPCIÓN MANUAL
+   * =====================================================
+   */
+
+  if (
+    pantalla ===
+    "manual"
+  ) {
+    const cantidadBobinasVista =
+      Number(
+        cantidadBobinas,
+      );
+
+    return (
+      <main className="mx-auto max-w-2xl px-6 py-10">
+
+        <button
+          type="button"
+          className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+          onClick={
+            volverInicio
+          }
+        >
+
+          <ArrowLeft
+            className="size-4"
+            aria-hidden="true"
+          />
+
+          Volver a Recepción
+
+        </button>
+
+        <h1 className="mt-6 text-3xl font-bold tracking-tight">
+          RECEPCIÓN MANUAL
+        </h1>
+
+        <p className="mt-1 text-base text-muted-foreground">
+          Complete los datos una sola vez y defina cuántas bobinas desea ingresar.
+        </p>
+
+        <form
+          onSubmit={
+            onSubmit
+          }
+          className="mt-8 space-y-6"
+        >
+
+          <div className="space-y-2">
+
+            <Label
+              htmlFor="codigo"
+              className="text-base"
+            >
+              Código de etiqueta
+            </Label>
+
+            <Input
+              id="codigo"
+              className={
+                inputClass
+              }
+              value={
+                codigo
+              }
+              maxLength={100}
+              autoComplete="off"
+              onChange={(e) =>
+                onChangeCodigo(
+                  e.target.value,
+                )
+              }
+              onBlur={
+                onBlurCodigo
+              }
+              required
+            />
+
+            {buscando && (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+
+                <Loader2
+                  className="size-4 animate-spin"
+                  aria-hidden="true"
+                />
+
+                Buscando etiqueta…
+
+              </p>
+            )}
+
+          </div>
+
+          <div className="space-y-2">
+
+            <Label
+              htmlFor="descripcion"
+              className="text-base"
+            >
+              Descripción
+            </Label>
+
+            <Input
+              id="descripcion"
+              className={
+                inputClass
+              }
+              value={
+                descripcion
+              }
+              maxLength={500}
+              readOnly={
+                descripcionBloqueada
+              }
+              onChange={(e) =>
+                setDescripcion(
+                  e.target.value,
+                )
+              }
+              required
+            />
+
+            {descripcionBloqueada && (
+              <p className="text-sm text-muted-foreground">
+                Descripción tomada del maestro de etiquetas.
+              </p>
+            )}
+
+          </div>
+
+          <div className="grid gap-6 sm:grid-cols-2">
+
+            <div className="space-y-2">
+
+              <Label
+                htmlFor="cantidad-bobinas"
+                className="text-base"
+              >
+                Cantidad de bobinas
+              </Label>
+
+              <Input
+                id="cantidad-bobinas"
+                className={
+                  inputClass
+                }
+                type="number"
+                min={1}
+                max={100}
+                step={1}
+                inputMode="numeric"
+                value={
+                  cantidadBobinas
+                }
+                onChange={(e) =>
+                  setCantidadBobinas(
+                    e.target.value.replace(
+                      /[^0-9]/g,
+                      "",
+                    ),
+                  )
+                }
+                required
+              />
+
+              <p className="text-sm text-muted-foreground">
+                Entre 1 y 100. Cada bobina recibirá un CQ distinto.
+              </p>
+
+            </div>
+
+            <div className="space-y-2">
+
+              <Label
+                htmlFor="cantidad"
+                className="text-base"
+              >
+                Cantidad por bobina
+              </Label>
+
+              <Input
+                id="cantidad"
+                className={
+                  inputClass
+                }
+                type="number"
+                min={1}
+                step={1}
+                inputMode="numeric"
+                value={
+                  cantidad
+                }
+                onChange={(e) =>
+                  setCantidad(
+                    e.target.value.replace(
+                      /[^0-9]/g,
+                      "",
+                    ),
+                  )
+                }
+                required
+              />
+
+              <p className="text-sm text-muted-foreground">
+                Esta cantidad se asignará a cada bobina creada.
+              </p>
+
+            </div>
+
+          </div>
+
+          <div className="grid gap-6 sm:grid-cols-2">
+
+            <div className="space-y-2">
+
+              <Label
+                htmlFor="proveedor"
+                className="text-base"
+              >
+                Proveedor (opcional)
+              </Label>
+
+              <Input
+                id="proveedor"
+                className={
+                  inputClass
+                }
+                value={
+                  proveedor
+                }
+                maxLength={200}
+                onChange={(e) =>
+                  setProveedor(
+                    e.target.value,
+                  )
+                }
+              />
+
+            </div>
+
+            <div className="space-y-2">
+
+              <Label
+                htmlFor="ubicacion"
+                className="text-base"
+              >
+                Ubicación (opcional)
+              </Label>
+
+              <Input
+                id="ubicacion"
+                className={
+                  inputClass
+                }
+                value={
+                  ubicacion
+                }
+                maxLength={200}
+                onChange={(e) =>
+                  setUbicacion(
+                    e.target.value,
+                  )
+                }
+              />
+
+            </div>
+
+          </div>
+
+          <div className="space-y-2">
+
+            <Label
+              htmlFor="operario"
+              className="text-base"
+            >
+              Operario (opcional)
+            </Label>
+
+            <Input
+              id="operario"
+              className={
+                inputClass
+              }
+              value={
+                operario
+              }
+              maxLength={200}
+              onChange={(e) =>
+                setOperario(
+                  e.target.value,
+                )
+              }
+            />
+
+          </div>
+
+          {error && (
+            <p
+              role="alert"
+              className="rounded-md bg-destructive/10 p-4 text-base text-destructive"
+            >
+              {error}
+            </p>
+          )}
+
+          <Button
+            type="submit"
+            size="lg"
+            disabled={
+              enviando
+            }
+            className="h-20 w-full text-2xl font-bold"
+          >
+
+            {enviando ? (
+              <>
+                <Loader2
+                  className="size-6 animate-spin"
+                  aria-hidden="true"
+                />
+
+                REGISTRANDO…
+              </>
+            ) : Number.isInteger(
+                cantidadBobinasVista,
+              ) &&
+              cantidadBobinasVista >
+                1 ? (
+              `INGRESAR ${cantidadBobinasVista} BOBINAS`
+            ) : (
+              "INGRESAR BOBINA"
+            )}
+
+          </Button>
+
+        </form>
+
+      </main>
+    );
+  }
+
+  /*
+   * =====================================================
+   * PANTALLA INICIAL DE RECEPCIÓN
+   * =====================================================
+   */
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-10">
+    <main className="mx-auto max-w-3xl px-6 py-10">
 
       <Link
         to="/"
         className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
       >
+
         <ArrowLeft
           className="size-4"
           aria-hidden="true"
         />
 
         Menú principal
+
       </Link>
 
       <h1 className="mt-6 text-3xl font-bold tracking-tight">
@@ -843,267 +1874,247 @@ function Recepcion() {
       </h1>
 
       <p className="mt-1 text-base text-muted-foreground">
-        Complete los datos una sola vez y defina cuántas bobinas desea ingresar.
+        Seleccione el tipo de recepción que desea realizar.
       </p>
 
-      <form
-        onSubmit={onSubmit}
-        className="mt-8 space-y-6"
-      >
+      {/*
+       * =================================================
+       * 1. RECEPCIÓN MANUAL
+       * =================================================
+       */}
 
-        <div className="space-y-2">
+      <section className="mt-8">
 
-          <Label
-            htmlFor="codigo"
-            className="text-base"
-          >
-            Código de etiqueta
-          </Label>
+        <div className="rounded-xl border border-border bg-card p-6">
 
-          <Input
-            id="codigo"
-            className={inputClass}
-            value={codigo}
-            maxLength={100}
-            autoComplete="off"
-            onChange={(e) =>
-              onChangeCodigo(
-                e.target.value,
-              )
+          <div className="flex items-start gap-4">
+
+            <ClipboardPlus
+              className="mt-1 size-9 shrink-0"
+              aria-hidden="true"
+            />
+
+            <div className="flex-1">
+
+              <h2 className="text-xl font-bold">
+                NUEVA RECEPCIÓN MANUAL
+              </h2>
+
+              <p className="mt-1 text-base text-muted-foreground">
+                Registrar directamente una o varias bobinas que ingresan a Coquimbito.
+              </p>
+
+              <Button
+                type="button"
+                size="lg"
+                className="mt-5 h-14 w-full text-lg font-semibold"
+                onClick={
+                  abrirRecepcionManual
+                }
+              >
+                ABRIR RECEPCIÓN MANUAL
+              </Button>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+      {/*
+       * =================================================
+       * 2. RECEPCIONES DE PROVEEDORES
+       * =================================================
+       */}
+
+      <section className="mt-10">
+
+        <div className="flex items-center justify-between gap-4">
+
+          <div>
+
+            <h2 className="text-xl font-bold">
+              RECEPCIONES PENDIENTES DE PROVEEDORES
+            </h2>
+
+            <p className="mt-1 text-sm text-muted-foreground">
+              Envíos declarados por proveedores que todavía deben ser confirmados en Coquimbito.
+            </p>
+
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={
+              cargandoPendientes
             }
-            onBlur={onBlurCodigo}
-            required
-          />
+            onClick={() =>
+              void cargarPendientes()
+            }
+          >
 
-          {buscando && (
-            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <RefreshCw
+              className={
+                cargandoPendientes
+                  ? "mr-2 size-4 animate-spin"
+                  : "mr-2 size-4"
+              }
+              aria-hidden="true"
+            />
+
+            ACTUALIZAR
+
+          </Button>
+
+        </div>
+
+        {cargandoPendientes &&
+          enviosPendientes.length ===
+            0 && (
+            <div className="mt-5 rounded-xl border border-border bg-card p-6 text-center">
 
               <Loader2
-                className="size-4 animate-spin"
+                className="mx-auto size-7 animate-spin"
                 aria-hidden="true"
               />
 
-              Buscando etiqueta…
+              <p className="mt-3 text-muted-foreground">
+                Cargando recepciones pendientes…
+              </p>
 
-            </p>
+            </div>
           )}
 
-        </div>
-
-        <div className="space-y-2">
-
-          <Label
-            htmlFor="descripcion"
-            className="text-base"
-          >
-            Descripción
-          </Label>
-
-          <Input
-            id="descripcion"
-            className={inputClass}
-            value={descripcion}
-            maxLength={500}
-            readOnly={descripcionBloqueada}
-            onChange={(e) =>
-              setDescripcion(
-                e.target.value,
-              )
-            }
-            required
-          />
-
-          {descripcionBloqueada && (
-            <p className="text-sm text-muted-foreground">
-              Descripción tomada del maestro de etiquetas.
-            </p>
-          )}
-
-        </div>
-
-        <div className="grid gap-6 sm:grid-cols-2">
-
-          <div className="space-y-2">
-
-            <Label
-              htmlFor="cantidad-bobinas"
-              className="text-base"
-            >
-              Cantidad de bobinas
-            </Label>
-
-            <Input
-              id="cantidad-bobinas"
-              className={inputClass}
-              type="number"
-              min={1}
-              max={100}
-              step={1}
-              inputMode="numeric"
-              value={cantidadBobinas}
-              onChange={(e) =>
-                setCantidadBobinas(
-                  e.target.value.replace(
-                    /[^0-9]/g,
-                    "",
-                  ),
-                )
-              }
-              required
-            />
-
-            <p className="text-sm text-muted-foreground">
-              Entre 1 y 100. Cada bobina recibirá un CQ distinto.
-            </p>
-
-          </div>
-
-          <div className="space-y-2">
-
-            <Label
-              htmlFor="cantidad"
-              className="text-base"
-            >
-              Cantidad por bobina
-            </Label>
-
-            <Input
-              id="cantidad"
-              className={inputClass}
-              type="number"
-              min={1}
-              step={1}
-              inputMode="numeric"
-              value={cantidad}
-              onChange={(e) =>
-                setCantidad(
-                  e.target.value.replace(
-                    /[^0-9]/g,
-                    "",
-                  ),
-                )
-              }
-              required
-            />
-
-            <p className="text-sm text-muted-foreground">
-              Esta cantidad se asignará a cada bobina creada.
-            </p>
-
-          </div>
-
-        </div>
-
-        <div className="grid gap-6 sm:grid-cols-2">
-
-          <div className="space-y-2">
-
-            <Label
-              htmlFor="proveedor"
-              className="text-base"
-            >
-              Proveedor (opcional)
-            </Label>
-
-            <Input
-              id="proveedor"
-              className={inputClass}
-              value={proveedor}
-              maxLength={200}
-              onChange={(e) =>
-                setProveedor(
-                  e.target.value,
-                )
-              }
-            />
-
-          </div>
-
-          <div className="space-y-2">
-
-            <Label
-              htmlFor="ubicacion"
-              className="text-base"
-            >
-              Ubicación (opcional)
-            </Label>
-
-            <Input
-              id="ubicacion"
-              className={inputClass}
-              value={ubicacion}
-              maxLength={200}
-              onChange={(e) =>
-                setUbicacion(
-                  e.target.value,
-                )
-              }
-            />
-
-          </div>
-
-        </div>
-
-        <div className="space-y-2">
-
-          <Label
-            htmlFor="operario"
-            className="text-base"
-          >
-            Operario (opcional)
-          </Label>
-
-          <Input
-            id="operario"
-            className={inputClass}
-            value={operario}
-            maxLength={200}
-            onChange={(e) =>
-              setOperario(
-                e.target.value,
-              )
-            }
-          />
-
-        </div>
-
-        {error && (
-          <p
+        {errorPendientes && (
+          <div
             role="alert"
-            className="rounded-md bg-destructive/10 p-4 text-base text-destructive"
+            className="mt-5 rounded-md bg-destructive/10 p-4 text-destructive"
           >
-            {error}
-          </p>
+
+            <p className="font-semibold">
+              {errorPendientes}
+            </p>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={() =>
+                void cargarPendientes()
+              }
+            >
+              REINTENTAR
+            </Button>
+
+          </div>
         )}
 
-        <Button
-          type="submit"
-          size="lg"
-          disabled={enviando}
-          className="h-20 w-full text-2xl font-bold"
-        >
+        {!cargandoPendientes &&
+          !errorPendientes &&
+          enviosPendientes.length ===
+            0 && (
+            <div className="mt-5 rounded-xl border border-border bg-card p-6 text-center">
 
-          {enviando ? (
-            <>
-              <Loader2
-                className="size-6 animate-spin"
+              <PackageOpen
+                className="mx-auto size-8 text-muted-foreground"
                 aria-hidden="true"
               />
 
-              REGISTRANDO…
-            </>
-          ) : Number.isInteger(
-              cantidadBobinasVista,
-            ) &&
-            cantidadBobinasVista > 1 ? (
-            `INGRESAR ${cantidadBobinasVista} BOBINAS`
-          ) : (
-            "INGRESAR BOBINA"
+              <p className="mt-3 font-semibold">
+                No hay recepciones pendientes de proveedores.
+              </p>
+
+            </div>
           )}
 
-        </Button>
+        <div className="mt-5 space-y-4">
 
-      </form>
+          {enviosPendientes.map(
+            (envio) => (
+              <div
+                key={
+                  envio.id_envio
+                }
+                className="rounded-xl border border-border bg-card p-5"
+              >
+
+                <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+
+                  <div>
+
+                    <p className="text-xl font-bold">
+                      {envio.proveedor}
+                    </p>
+
+                    <p className="mt-1 text-base">
+                      Remito{" "}
+                      <span className="font-semibold">
+                        {envio.numero_remito}
+                      </span>
+                    </p>
+
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Fecha de despacho:{" "}
+                      {formatearFecha(
+                        envio.fecha_despacho,
+                      )}
+                    </p>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+
+                      <span className="rounded-md bg-muted px-3 py-1 text-sm font-semibold">
+                        {envio.cantidad_productos}{" "}
+                        producto
+                        {envio.cantidad_productos ===
+                        1
+                          ? ""
+                          : "s"}
+                      </span>
+
+                      <span className="rounded-md bg-muted px-3 py-1 text-sm font-semibold">
+                        {envio.cantidad_bobinas}{" "}
+                        bobina
+                        {envio.cantidad_bobinas ===
+                        1
+                          ? ""
+                          : "s"}
+                      </span>
+
+                    </div>
+
+                  </div>
+
+                  <Button
+                    type="button"
+                    size="lg"
+                    className="h-14 shrink-0 px-6 text-base font-semibold"
+                    onClick={() => {
+                      setEnvioSeleccionado(
+                        envio,
+                      );
+
+                      setPantalla(
+                        "proveedor",
+                      );
+                    }}
+                  >
+                    ABRIR RECEPCIÓN
+                  </Button>
+
+                </div>
+
+              </div>
+            ),
+          )}
+
+        </div>
+
+      </section>
 
     </main>
   );
