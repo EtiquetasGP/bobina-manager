@@ -20,25 +20,6 @@ type BrowserPrintApi = {
   ) => void;
 };
 
-type ZebraPrinterApi = {
-  isReadyToPrint: (
-    successCallback: (ready: boolean) => void,
-    errorCallback?: (error: unknown) => void,
-  ) => void;
-};
-
-type ZebraApi = {
-  Printer: new (
-    device: ZebraDevice,
-  ) => ZebraPrinterApi;
-};
-
-/*
- * =====================================================
- * ACCESO A LAS LIBRERÍAS GLOBALES DE ZEBRA
- * =====================================================
- */
-
 function obtenerBrowserPrintApi():
   | BrowserPrintApi
   | undefined {
@@ -48,22 +29,6 @@ function obtenerBrowserPrintApi():
     }
   ).BrowserPrint;
 }
-
-function obtenerZebraApi():
-  | ZebraApi
-  | undefined {
-  return (
-    window as Window & {
-      Zebra?: ZebraApi;
-    }
-  ).Zebra;
-}
-
-/*
- * =====================================================
- * UTILIDADES
- * =====================================================
- */
 
 function esperar(
   milisegundos: number,
@@ -76,54 +41,15 @@ function esperar(
   });
 }
 
-function obtenerMensajeError(
-  error: unknown,
-): string {
-  if (
-    error instanceof Error &&
-    error.message
-  ) {
-    return error.message;
-  }
-
-  if (
-    typeof error === "string"
-  ) {
-    return error;
-  }
-
-  try {
-    return JSON.stringify(
-      error,
-    );
-  } catch {
-    return String(error);
-  }
-}
-
-/*
- * =====================================================
- * CARGA DE SCRIPTS
- * =====================================================
- */
-
 function cargarScript(
   src: string,
   id: string,
-  estaDisponible: () => boolean,
 ): Promise<void> {
   return new Promise(
     (
       resolve,
       reject,
     ) => {
-      if (
-        estaDisponible()
-      ) {
-        resolve();
-        return;
-      }
-
       const existente =
         document.getElementById(
           id,
@@ -131,10 +57,9 @@ function cargarScript(
 
       if (existente) {
         if (
-          existente.dataset
-            .cargado ===
+          existente.dataset.cargado ===
             "true" ||
-          estaDisponible()
+          obtenerBrowserPrintApi()
         ) {
           resolve();
           return;
@@ -142,12 +67,7 @@ function cargarScript(
 
         existente.addEventListener(
           "load",
-          () => {
-            existente.dataset.cargado =
-              "true";
-
-            resolve();
-          },
+          () => resolve(),
           {
             once: true,
           },
@@ -200,33 +120,22 @@ function cargarScript(
   );
 }
 
-/*
- * =====================================================
- * INICIALIZACIÓN DE BROWSER PRINT
- * =====================================================
- */
-
 async function cargarBrowserPrintInterno() {
-  /*
-   * Antes el archivo salía inmediatamente
-   * si BrowserPrint ya existía.
-   *
-   * Ahora comprobamos por separado la
-   * librería base y BrowserPrint-Zebra.
-   */
-
   if (
-    !obtenerBrowserPrintApi()
+    obtenerBrowserPrintApi()
   ) {
-    await cargarScript(
-      "/BrowserPrint-3.1.250.min.js",
-      "browser-print",
-      () =>
-        Boolean(
-          obtenerBrowserPrintApi(),
-        ),
-    );
+    return;
   }
+
+  await cargarScript(
+    "/BrowserPrint-3.1.250.min.js",
+    "browser-print",
+  );
+
+  await cargarScript(
+    "/BrowserPrint-Zebra-1.1.250.min.js",
+    "browser-print-zebra",
+  );
 
   if (
     !obtenerBrowserPrintApi()
@@ -235,99 +144,56 @@ async function cargarBrowserPrintInterno() {
       "Zebra Browser Print no está disponible en esta computadora.",
     );
   }
-
-  if (
-    !obtenerZebraApi()
-  ) {
-    await cargarScript(
-      "/BrowserPrint-Zebra-1.1.250.min.js",
-      "browser-print-zebra",
-      () =>
-        Boolean(
-          obtenerZebraApi(),
-        ),
-    );
-  }
-
-  if (
-    !obtenerZebraApi()
-  ) {
-    throw new Error(
-      "No se pudo cargar la librería Zebra Browser Print.",
-    );
-  }
 }
 
 /*
  * =====================================================
- * COMPROBAR QUE LA ZEBRA ESTÁ LISTA
+ * OBTENER IMPRESORA UNA VEZ
  * =====================================================
  */
 
-async function verificarImpresoraLista(
-  device: ZebraDevice,
-): Promise<void> {
-  const zebra =
-    obtenerZebraApi();
+async function intentarObtenerImpresora():
+  Promise<ZebraDevice> {
+  const browserPrint =
+    obtenerBrowserPrintApi();
 
-  if (!zebra) {
+  if (!browserPrint) {
     throw new Error(
-      "La librería Zebra no está disponible.",
+      "Zebra Browser Print no está disponible.",
     );
   }
 
-  let printer:
-    ZebraPrinterApi;
-
-  try {
-    /*
-     * Zebra.Printer inicia comunicación
-     * con el dispositivo y administra
-     * correctamente sus consultas.
-     */
-    printer =
-      new zebra.Printer(
-        device,
-      );
-  } catch (error) {
-    console.error(
-      "No se pudo iniciar comunicación con la Zebra:",
-      error,
-    );
-
-    throw new Error(
-      "No se pudo iniciar la comunicación con la impresora Zebra.",
-    );
-  }
-
-  await new Promise<void>(
+  return new Promise<ZebraDevice>(
     (
       resolve,
       reject,
     ) => {
-      printer.isReadyToPrint(
-        (ready) => {
-          if (ready) {
-            resolve();
+      browserPrint.getDefaultDevice(
+        "printer",
+
+        (device) => {
+          if (!device) {
+            reject(
+              new Error(
+                "No se encontró una impresora Zebra predeterminada.",
+              ),
+            );
+
             return;
           }
 
-          reject(
-            new Error(
-              "La impresora Zebra está conectada, pero no está lista para imprimir. Revise papel, tapa y estado de la impresora.",
-            ),
-          );
+          resolve(device);
         },
 
         (error) => {
           console.error(
-            "Error consultando estado Zebra:",
+            "Error accediendo a la Zebra:",
             error,
           );
 
           reject(
             new Error(
-              "No se pudo verificar el estado de la impresora Zebra.",
+              "No se pudo acceder a la impresora mediante Zebra Browser Print.",
             ),
           );
         },
@@ -338,86 +204,62 @@ async function verificarImpresoraLista(
 
 /*
  * =====================================================
- * OBTENER IMPRESORA PREDETERMINADA
+ * OBTENER IMPRESORA CON REINTENTO SEGURO
  * =====================================================
+ *
+ * IMPORTANTE:
+ * Los reintentos ocurren ANTES de enviar cualquier ZPL.
+ * Por eso no existe riesgo de imprimir stickers duplicados.
  */
 
 async function obtenerImpresoraPredeterminadaInterna():
   Promise<ZebraDevice> {
   await cargarBrowserPrintInterno();
 
-  const browserPrint =
-    obtenerBrowserPrintApi();
+  let ultimoError:
+    unknown = null;
 
-  if (!browserPrint) {
-    throw new Error(
-      "Zebra Browser Print no está disponible.",
-    );
+  for (
+    let intento = 1;
+    intento <= 3;
+    intento++
+  ) {
+    try {
+      const impresora =
+        await intentarObtenerImpresora();
+
+      /*
+       * Damos un pequeño tiempo a Browser Print
+       * para estabilizar la conexión USB.
+       */
+      await esperar(400);
+
+      return impresora;
+    } catch (error) {
+      ultimoError =
+        error;
+
+      console.warn(
+        `Intento ${intento} de conexión Zebra falló.`,
+        error,
+      );
+
+      if (
+        intento < 3
+      ) {
+        await esperar(800);
+      }
+    }
   }
 
-  const device =
-    await new Promise<ZebraDevice>(
-      (
-        resolve,
-        reject,
-      ) => {
-        browserPrint.getDefaultDevice(
-          "printer",
-
-          (
-            impresora,
-          ) => {
-            if (!impresora) {
-              reject(
-                new Error(
-                  "No se encontró una impresora Zebra predeterminada.",
-                ),
-              );
-
-              return;
-            }
-
-            resolve(
-              impresora,
-            );
-          },
-
-          (error) => {
-            console.error(
-              "Error obteniendo impresora Zebra:",
-              error,
-            );
-
-            reject(
-              new Error(
-                "No se pudo acceder a la impresora mediante Zebra Browser Print.",
-              ),
-            );
-          },
-        );
-      },
-    );
-
-  /*
-   * No alcanza con que Browser Print conozca
-   * cuál es la impresora predeterminada.
-   *
-   * Comprobamos que realmente se pueda
-   * comunicar con ella y que esté lista.
-   */
-
-  await verificarImpresoraLista(
-    device,
+  console.error(
+    "No se pudo acceder a la Zebra después de 3 intentos.",
+    ultimoError,
   );
 
-  /*
-   * Pequeña estabilización después de establecer
-   * comunicación con la Zebra.
-   */
-
-  await esperar(300);
-
-  return device;
+  throw new Error(
+    "No se pudo acceder a la impresora Zebra. Verifique que esté encendida y conectada.",
+  );
 }
 
 /*
@@ -443,20 +285,14 @@ async function enviarZplInterno(
         },
 
         (error) => {
-          const detalle =
-            obtenerMensajeError(
-              error,
-            );
-
           console.error(
-            "Browser Print rechazó el envío ZPL:",
-            detalle,
+            "Error enviando ZPL a Zebra:",
             error,
           );
 
           reject(
             new Error(
-              `La Zebra no pudo recibir la etiqueta. ${detalle}`,
+              "La Zebra no pudo recibir la etiqueta.",
             ),
           );
         },
@@ -465,14 +301,10 @@ async function enviarZplInterno(
   );
 
   /*
-   * Evitamos mandar dos trabajos ZPL
-   * consecutivos en el mismo instante.
-   *
-   * Cada ZPL nuestro contiene ^PQ2,
-   * por lo que sigue imprimiendo exactamente
-   * 2 stickers por CQ.
+   * Espaciamos ligeramente los trabajos.
+   * Cada ZPL ya contiene ^PQ2,
+   * así que siguen siendo 2 stickers por CQ.
    */
-
   await esperar(250);
 }
 
