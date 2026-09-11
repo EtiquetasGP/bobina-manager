@@ -1,8 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
 import {
-  ArrowLeft,
   CheckCircle2,
   Loader2,
   Plus,
@@ -250,11 +249,6 @@ function ProveedorEnvio() {
                 return producto;
               }
 
-              /*
-               * Si el usuario cambió el código
-               * mientras se hacía la consulta,
-               * ignoramos el resultado anterior.
-               */
               if (
                 producto.codigo_etiqueta.trim() !==
                 codigo
@@ -560,7 +554,7 @@ function ProveedorEnvio() {
           </h1>
 
           <p className="mt-2 text-base text-muted-foreground">
-            La pre-recepción quedó pendiente de confirmación en Coquimbito.
+            El envío fue registrado correctamente.
           </p>
 
           <dl className="mt-8 space-y-3 text-left text-lg">
@@ -627,39 +621,15 @@ function ProveedorEnvio() {
 
           </dl>
 
-          <div className="mt-8 rounded-md bg-muted p-4 text-left">
-
-            <p className="font-semibold">
-              Importante
-            </p>
-
-            <p className="mt-1 text-sm text-muted-foreground">
-              Este envío todavía no creó bobinas ni códigos CQ.
-              Los CQ se generarán recién cuando Coquimbito confirme la recepción física.
-            </p>
-
-          </div>
-
-          <div className="mt-8 flex flex-col gap-3">
+          <div className="mt-8">
 
             <Button
               type="button"
               size="lg"
-              className="h-16 text-xl font-semibold"
+              className="h-16 w-full text-xl font-semibold"
               onClick={reiniciar}
             >
               CARGAR OTRO ENVÍO
-            </Button>
-
-            <Button
-              asChild
-              variant="outline"
-              size="lg"
-              className="h-12 text-base"
-            >
-              <Link to="/">
-                VOLVER
-              </Link>
             </Button>
 
           </div>
@@ -711,34 +681,20 @@ function ProveedorEnvio() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
 
-      <Link
-        to="/"
-        className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft
-          className="size-4"
-          aria-hidden="true"
-        />
+      <div className="text-center">
+        <h1 className="text-3xl font-bold tracking-tight">
+          NUEVO ENVÍO
+        </h1>
 
-        Volver
-      </Link>
-
-      <h1 className="mt-6 text-3xl font-bold tracking-tight">
-        NUEVO ENVÍO
-      </h1>
-
-      <p className="mt-1 text-base text-muted-foreground">
-        Cargue los productos incluidos en el mismo remito.
-      </p>
+        <p className="mt-2 text-base text-muted-foreground">
+          Cargue los productos incluidos en el mismo remito.
+        </p>
+      </div>
 
       <form
         onSubmit={onSubmit}
         className="mt-8 space-y-8"
       >
-
-        {/*
-         * DATOS GENERALES DEL ENVÍO
-         */}
 
         <section className="rounded-xl border border-border bg-card p-5">
 
@@ -849,28 +805,20 @@ function ProveedorEnvio() {
 
         </section>
 
-        {/*
-         * PRODUCTOS
-         */}
-
         <section>
 
-          <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold">
+              PRODUCTOS
+            </h2>
 
-            <div>
-              <h2 className="text-xl font-bold">
-                PRODUCTOS
-              </h2>
-
-              <p className="mt-1 text-sm text-muted-foreground">
-                {productos.length} producto
-                {productos.length === 1
-                  ? ""
-                  : "s"}{" "}
-                · {totalBobinas} bobinas declaradas
-              </p>
-            </div>
-
+            <p className="mt-1 text-sm text-muted-foreground">
+              {productos.length} producto
+              {productos.length === 1
+                ? ""
+                : "s"}{" "}
+              · {totalBobinas} bobinas declaradas
+            </p>
           </div>
 
           <div className="mt-5 space-y-6">
