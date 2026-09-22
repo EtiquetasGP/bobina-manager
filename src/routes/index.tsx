@@ -27,7 +27,7 @@ const acciones = [
   { label: "DEVOLUCIÓN", icon: Undo2, to: "/devolucion" as const, activo: true },
   { label: "CONSULTAR BOBINA", icon: Search, to: "/consultar-bobina" as const, activo: true },
   { label: "INVENTARIO", icon: ClipboardList, to: "/inventario" as const, activo: true },
-  { label: "PICKING", icon: Boxes, activo: false },
+  { label: "PICKING", icon: Boxes, to: "/picking" as const, activo: true },
 ];
 
 function Index() {
