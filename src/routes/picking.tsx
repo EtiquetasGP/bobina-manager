@@ -82,14 +82,32 @@ function normalizarAnio(value: string | null | undefined) {
 }
 
 function normalizarAlcohol(value: string | null | undefined) {
-  const limpio = String(value ?? "")
+  let limpio = String(value ?? "")
+    .trim()
     .replace(",", ".")
-    .replace(/[^0-9.]/g, "")
-    .trim();
+    .replace(/[^0-9.]/g, "");
+
+  limpio = limpio.replace(/\.$/, "");
 
   if (!limpio) return null;
-  const numero = Number(limpio);
-  return Number.isFinite(numero) ? numero : null;
+
+  const numeroInicial = Number(limpio);
+
+  if (!Number.isFinite(numeroInicial)) return null;
+
+  let numero = numeroInicial;
+
+  if (numero > 0 && numero < 1) {
+    numero = numero * 100;
+  } else if (numero > 30 && numero <= 300) {
+    numero = numero / 10;
+  }
+
+  if (numero <= 0 || numero > 30) {
+    return null;
+  }
+
+  return Math.round(numero * 1000) / 1000;
 }
 
 function validarBobinaContraItem(bobina: BobinaPicking, item: ItemPicking) {
@@ -198,6 +216,9 @@ function Picking() {
   const [cargandoOrdenes, setCargandoOrdenes] = useState(false);
   const [cargandoDetalle, setCargandoDetalle] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [validacionesEscaneo, setValidacionesEscaneo] = useState<
+    Record<number, { tipo: "ok" | "error"; mensaje: string }>
+  >({});
   const [mensaje, setMensaje] = useState<string | null>(null);
 
   const [operario, setOperario] = useState("");
@@ -223,6 +244,7 @@ function Picking() {
     setCantidades({});
     setSelectorItem(null);
     setBobinasDisponibles([]);
+    setValidacionesEscaneo({});
     setMensaje(null);
   };
 
@@ -358,34 +380,85 @@ function Picking() {
     setBobinasDisponibles([]);
   };
 
-  const consultarEscaneo = async (item: ItemPicking) => {
-    const idBobina = String(escaneos[item.id_item_picking] ?? "")
-      .trim()
-      .toUpperCase();
+const consultarEscaneo = async (item: ItemPicking) => {
+  const idBobina = String(escaneos[item.id_item_picking] ?? "")
+    .trim()
+    .toUpperCase();
 
-    if (!idBobina) {
-      setError("Escanee o ingrese un ID de bobina.");
+  if (!idBobina) {
+    setValidacionesEscaneo((actual) => ({
+      ...actual,
+      [item.id_item_picking]: {
+        tipo: "error",
+        mensaje: "Escanee o ingrese un ID de bobina.",
+      },
+    }));
+    return;
+  }
+
+  setCargandoBobinaItem(item.id_item_picking);
+  setError(null);
+  setMensaje(null);
+
+  setValidacionesEscaneo((actual) => {
+    const nuevo = { ...actual };
+    delete nuevo[item.id_item_picking];
+    return nuevo;
+  });
+
+  try {
+    const bobina = await consultarBobinaFn({
+      data: { idBobina },
+    });
+
+    if (!bobina) {
+      setValidacionesEscaneo((actual) => ({
+        ...actual,
+        [item.id_item_picking]: {
+          tipo: "error",
+          mensaje: `La bobina ${idBobina} no existe en el sistema.`,
+        },
+      }));
       return;
     }
 
-    setCargandoBobinaItem(item.id_item_picking);
-    setError(null);
-    setMensaje(null);
+    const validacion = validarBobinaContraItem(bobina, item);
 
-    try {
-      const bobina = await consultarBobinaFn({ data: { idBobina } });
-      if (!bobina) {
-        setError(`La bobina ${idBobina} no existe en el sistema.`);
-        return;
-      }
-      seleccionarBobina(item, bobina);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo consultar la bobina.");
-    } finally {
-      setCargandoBobinaItem(null);
+    if (validacion) {
+      setValidacionesEscaneo((actual) => ({
+        ...actual,
+        [item.id_item_picking]: {
+          tipo: "error",
+          mensaje: validacion,
+        },
+      }));
+      return;
     }
-  };
 
+    seleccionarBobina(item, bobina);
+
+    setValidacionesEscaneo((actual) => ({
+      ...actual,
+      [item.id_item_picking]: {
+        tipo: "ok",
+        mensaje: `Bobina ${bobina.id_bobina} válida.`,
+      },
+    }));
+  } catch (e) {
+    setValidacionesEscaneo((actual) => ({
+      ...actual,
+      [item.id_item_picking]: {
+        tipo: "error",
+        mensaje:
+          e instanceof Error
+            ? e.message
+            : "No se pudo consultar la bobina.",
+      },
+    }));
+  } finally {
+    setCargandoBobinaItem(null);
+  }
+};
   const abrirSelectorBobinas = async (item: ItemPicking) => {
     if (selectorItem === item.id_item_picking) {
       setSelectorItem(null);
@@ -711,12 +784,20 @@ function Picking() {
                           <div className="flex gap-2">
                             <Input
                               value={escaneos[item.id_item_picking] ?? ""}
-                              onChange={(e) =>
+                              onChange={(e) => {
+                                const valor = e.target.value.toUpperCase();
+
                                 setEscaneos((actual) => ({
                                   ...actual,
-                                  [item.id_item_picking]: e.target.value.toUpperCase(),
-                                }))
-                              }
+                                  [item.id_item_picking]: valor,
+                                }));
+
+                                setValidacionesEscaneo((actual) => {
+                                  const siguiente = { ...actual };
+                                  delete siguiente[item.id_item_picking];
+                                  return siguiente;
+                                });
+                              }}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") {
                                   e.preventDefault();
@@ -749,6 +830,19 @@ function Picking() {
                             {selectorItem === item.id_item_picking ? "Cerrar selección" : "Seleccionar bobina"}
                           </Button>
                         </div>
+
+                        {validacionesEscaneo[item.id_item_picking] && (
+                          <p
+                            role="status"
+                            className={
+                              validacionesEscaneo[item.id_item_picking].tipo === "ok"
+                                ? "mt-2 text-sm font-semibold text-emerald-700"
+                                : "mt-2 text-sm font-semibold text-destructive"
+                            }
+                          >
+                            {validacionesEscaneo[item.id_item_picking].mensaje}
+                          </p>
+                        )}
 
                         {selectorItem === item.id_item_picking && (
                           <div className="mt-3 rounded-xl bg-muted/40 p-3">
