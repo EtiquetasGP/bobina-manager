@@ -942,9 +942,6 @@ const consultarEscaneo = async (item: ItemPicking) => {
                               <Button type="button" onClick={() => agregarEntrega(item)}>
                                 Agregar a preparación
                               </Button>
-                              <p className="text-sm text-muted-foreground">
-                                Si entrega menos que {nf.format(bobinaActiva.cantidad_actual)}, la bobina se parcializa y el remanente queda en ALMACEN. Si entrega todo, la bobina pasa a LINEA.
-                              </p>
                             </div>
                           </div>
                         )}
