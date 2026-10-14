@@ -1,7 +1,11 @@
-  import { createServerFn } from "@tanstack/react-start";
+import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { requireOperario } from "@/lib/operario.middleware";
 
-function lanzarErrorOperativo(error: unknown, mensaje: string): never {
+function lanzarErrorOperativo(
+  error: unknown,
+  mensaje: string,
+): never {
   console.error(mensaje, error);
   throw new Error(mensaje);
 }
@@ -14,12 +18,27 @@ const recepcionSchema = z.object({
   codigo_etiqueta: z.string().trim().min(1).max(100),
   descripcion: z.string().trim().max(500),
   cantidad: z.number().int().positive().max(1_000_000_000),
-  proveedor: z.string().trim().max(200),
-  ubicacion: z.string().trim().max(200),
-  operario: z.string().trim().max(200),
+
+  proveedor: z
+    .string()
+    .trim()
+    .min(1, "El proveedor es obligatorio.")
+    .max(200),
+
+  ubicacion: z
+    .string()
+    .trim()
+    .min(1, "La ubicación es obligatoria.")
+    .max(200),
+
+  // Compatibilidad temporal con los formularios actuales.
+  // El nombre enviado no se utiliza para registrar movimientos.
+  operario: z.string().trim().max(200).optional(),
 });
 
-export const buscarEtiqueta = createServerFn({ method: "POST" })
+export const buscarEtiqueta = createServerFn({
+  method: "POST",
+})
   .validator((data: unknown) => codigoSchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import(
@@ -45,9 +64,12 @@ export const buscarEtiqueta = createServerFn({ method: "POST" })
     };
   });
 
-export const registrarRecepcion = createServerFn({ method: "POST" })
+export const registrarRecepcion = createServerFn({
+  method: "POST",
+})
+  .middleware([requireOperario])
   .validator((data: unknown) => recepcionSchema.parse(data))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import(
       "@/integrations/supabase/client.server"
     );
@@ -58,9 +80,9 @@ export const registrarRecepcion = createServerFn({ method: "POST" })
         p_codigo_etiqueta: data.codigo_etiqueta,
         p_descripcion: data.descripcion,
         p_cantidad: data.cantidad,
-        p_proveedor: data.proveedor || null,
-        p_ubicacion: data.ubicacion || null,
-        p_operario: data.operario || null,
+        p_proveedor: data.proveedor,
+        p_ubicacion: data.ubicacion,
+        p_operario: context.operario,
       } as never,
     );
 
@@ -80,9 +102,14 @@ const recepcionMultipleSchema = recepcionSchema.extend({
   cantidad_bobinas: z.number().int().min(1).max(100),
 });
 
-export const registrarRecepcionMultiple = createServerFn({ method: "POST" })
-  .validator((data: unknown) => recepcionMultipleSchema.parse(data))
-  .handler(async ({ data }) => {
+export const registrarRecepcionMultiple = createServerFn({
+  method: "POST",
+})
+  .middleware([requireOperario])
+  .validator((data: unknown) =>
+    recepcionMultipleSchema.parse(data),
+  )
+  .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import(
       "@/integrations/supabase/client.server"
     );
@@ -96,9 +123,9 @@ export const registrarRecepcionMultiple = createServerFn({ method: "POST" })
           p_codigo_etiqueta: data.codigo_etiqueta,
           p_descripcion: data.descripcion,
           p_cantidad: data.cantidad,
-          p_proveedor: data.proveedor || null,
-          p_ubicacion: data.ubicacion || null,
-          p_operario: data.operario || null,
+          p_proveedor: data.proveedor,
+          p_ubicacion: data.ubicacion,
+          p_operario: context.operario,
         } as never,
       );
 
@@ -143,7 +170,7 @@ const devolucionSchema = z.object({
   id_bobina: z.string().trim().min(1).max(100),
   cantidad: z.number().int().positive().max(1_000_000_000),
   linea: z.string().trim().max(200),
-  operario: z.string().trim().max(200),
+  operario: z.string().trim().max(200).optional(),
   ubicacion: z.string().trim().max(200),
   observacion: z.string().trim().max(1000),
 });
@@ -166,7 +193,10 @@ export type BobinaFicha = {
   origen_alta: string | null;
 };
 
-export const consultarBobina = createServerFn({ method: "POST" })
+export const consultarBobina = createServerFn({
+  method: "POST",
+})
+  .middleware([requireOperario])
   .validator((data: unknown) => idBobinaSchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import(
@@ -193,9 +223,12 @@ export const consultarBobina = createServerFn({ method: "POST" })
     return { bobina };
   });
 
-export const registrarDevolucion = createServerFn({ method: "POST" })
+export const registrarDevolucion = createServerFn({
+  method: "POST",
+})
+  .middleware([requireOperario])
   .validator((data: unknown) => devolucionSchema.parse(data))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import(
       "@/integrations/supabase/client.server"
     );
@@ -206,7 +239,7 @@ export const registrarDevolucion = createServerFn({ method: "POST" })
         p_id_bobina: data.id_bobina,
         p_cantidad: data.cantidad,
         p_linea: data.linea || null,
-        p_operario: data.operario || null,
+        p_operario: context.operario,
         p_ubicacion: data.ubicacion || null,
         p_observacion: data.observacion || null,
       } as never,
@@ -228,7 +261,7 @@ const inventarioExistenteSchema = z.object({
   id_bobina: z.string().trim().min(1).max(100),
   cantidad: z.number().int().positive().max(1_000_000_000),
   ubicacion: z.string().trim().max(200),
-  operario: z.string().trim().max(200),
+  operario: z.string().trim().max(200).optional(),
   observacion: z.string().trim().max(1000),
 });
 
@@ -242,19 +275,23 @@ const altaInventarioSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/),
   proveedor: z.string().trim().max(200),
   ubicacion: z.string().trim().max(200),
-  operario: z.string().trim().max(200),
+  operario: z.string().trim().max(200).optional(),
   observacion: z.string().trim().max(1000),
 });
 
-const altaInventarioMultipleSchema = altaInventarioSchema.extend({
-  cantidad_bobinas: z.number().int().min(1).max(100),
-});
+const altaInventarioMultipleSchema =
+  altaInventarioSchema.extend({
+    cantidad_bobinas: z.number().int().min(1).max(100),
+  });
 
 export const registrarInventarioExistente = createServerFn({
   method: "POST",
 })
-  .validator((data: unknown) => inventarioExistenteSchema.parse(data))
-  .handler(async ({ data }) => {
+  .middleware([requireOperario])
+  .validator((data: unknown) =>
+    inventarioExistenteSchema.parse(data),
+  )
+  .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import(
       "@/integrations/supabase/client.server"
     );
@@ -265,7 +302,7 @@ export const registrarInventarioExistente = createServerFn({
         p_id_bobina: data.id_bobina,
         p_cantidad: data.cantidad,
         p_ubicacion: data.ubicacion || null,
-        p_operario: data.operario || null,
+        p_operario: context.operario,
         p_observacion: data.observacion || null,
       } as never,
     );
@@ -282,9 +319,14 @@ export const registrarInventarioExistente = createServerFn({
     };
   });
 
-export const registrarAltaInventario = createServerFn({ method: "POST" })
-  .validator((data: unknown) => altaInventarioSchema.parse(data))
-  .handler(async ({ data }) => {
+export const registrarAltaInventario = createServerFn({
+  method: "POST",
+})
+  .middleware([requireOperario])
+  .validator((data: unknown) =>
+    altaInventarioSchema.parse(data),
+  )
+  .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import(
       "@/integrations/supabase/client.server"
     );
@@ -298,7 +340,7 @@ export const registrarAltaInventario = createServerFn({ method: "POST" })
         p_fecha_ingreso: data.fecha_ingreso,
         p_proveedor: data.proveedor || null,
         p_ubicacion: data.ubicacion || null,
-        p_operario: data.operario || null,
+        p_operario: context.operario,
         p_observacion: data.observacion || null,
       } as never,
     );
@@ -318,8 +360,11 @@ export const registrarAltaInventario = createServerFn({ method: "POST" })
 export const registrarAltaInventarioMultiple = createServerFn({
   method: "POST",
 })
-  .validator((data: unknown) => altaInventarioMultipleSchema.parse(data))
-  .handler(async ({ data }) => {
+  .middleware([requireOperario])
+  .validator((data: unknown) =>
+    altaInventarioMultipleSchema.parse(data),
+  )
+  .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import(
       "@/integrations/supabase/client.server"
     );
@@ -336,7 +381,7 @@ export const registrarAltaInventarioMultiple = createServerFn({
           p_fecha_ingreso: data.fecha_ingreso,
           p_proveedor: data.proveedor || null,
           p_ubicacion: data.ubicacion || null,
-          p_operario: data.operario || null,
+          p_operario: context.operario,
           p_observacion: data.observacion || null,
         } as never,
       );
