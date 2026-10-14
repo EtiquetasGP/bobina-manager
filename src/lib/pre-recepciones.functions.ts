@@ -10,29 +10,13 @@ function lanzarErrorOperativo(
 }
 
 /*
- * =====================================================
- * PRE-RECEPCIÓN: NUEVO ENVÍO DEL PROVEEDOR
- * =====================================================
+ * NUEVO ENVÍO DEL PROVEEDOR
  */
 
 const productoPreRecepcionSchema = z.object({
-  codigo_etiqueta: z
-    .string()
-    .trim()
-    .min(1)
-    .max(100),
-
-  descripcion: z
-    .string()
-    .trim()
-    .max(500),
-
-  cantidad_bobinas: z
-    .number()
-    .int()
-    .min(1)
-    .max(100),
-
+  codigo_etiqueta: z.string().trim().min(1).max(100),
+  descripcion: z.string().trim().max(500),
+  cantidad_bobinas: z.number().int().min(1).max(100),
   cantidad_por_bobina: z
     .number()
     .int()
@@ -41,32 +25,14 @@ const productoPreRecepcionSchema = z.object({
 });
 
 const registrarEnvioSchema = z.object({
-  proveedor: z
-    .string()
-    .trim()
-    .min(1)
-    .max(200),
-
-  numero_remito: z
-    .string()
-    .trim()
-    .min(1)
-    .max(200),
-
+  proveedor: z.string().trim().min(1).max(200),
+  numero_remito: z.string().trim().min(1).max(200),
   fecha_despacho: z
     .string()
     .trim()
     .regex(/^\d{4}-\d{2}-\d{2}$/),
-
-  observacion: z
-    .string()
-    .trim()
-    .max(1000),
-
-  productos: z
-    .array(productoPreRecepcionSchema)
-    .min(1)
-    .max(50),
+  observacion: z.string().trim().max(1000),
+  productos: z.array(productoPreRecepcionSchema).min(1).max(50),
 });
 
 export type ProductoPreRecepcion = {
@@ -92,11 +58,7 @@ export type PreRecepcionLinea = {
 
   observacion: string;
 
-  estado:
-    | "PENDIENTE"
-    | "PARCIAL"
-    | "RECIBIDA"
-    | "CANCELADA";
+  estado: "PENDIENTE" | "PARCIAL" | "RECIBIDA" | "CANCELADA";
 
   cantidad_bobinas_recibidas: number | null;
   ubicacion_recepcion: string | null;
@@ -105,264 +67,190 @@ export type PreRecepcionLinea = {
   created_at: string;
 };
 
-export const registrarPreRecepcionEnvio =
-  createServerFn({
-    method: "POST",
-  })
-    .validator((data: unknown) =>
-      registrarEnvioSchema.parse(data),
-    )
-    .handler(async ({ data }) => {
-      const { supabaseAdmin } =
-        await import(
-          "@/integrations/supabase/client.server"
-        );
+export const registrarPreRecepcionEnvio = createServerFn({
+  method: "POST",
+})
+  .validator((data: unknown) => registrarEnvioSchema.parse(data))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import(
+      "@/integrations/supabase/client.server"
+    );
 
-      const { data: idEnvio, error } =
-        await supabaseAdmin.rpc(
-          "registrar_pre_recepcion_envio",
-          {
-            p_proveedor:
-              data.proveedor,
+    const { data: idEnvio, error } = await supabaseAdmin.rpc(
+      "registrar_pre_recepcion_envio",
+      {
+        p_proveedor: data.proveedor,
+        p_numero_remito: data.numero_remito,
+        p_fecha_despacho: data.fecha_despacho,
+        p_observacion: data.observacion || "",
+        p_productos: data.productos,
+      } as never,
+    );
 
-            p_numero_remito:
-              data.numero_remito,
+    if (error) {
+      console.error("Error registrando pre-recepción:", error);
 
-            p_fecha_despacho:
-              data.fecha_despacho,
+      const mensajeSupabase =
+        typeof error.message === "string" ? error.message : "";
 
-            p_observacion:
-              data.observacion || "",
-
-            p_productos:
-              data.productos,
-          } as never,
-        );
-
-      if (error) {
-        console.error(
-          "Error registrando pre-recepción:",
-          error,
-        );
-
-        const mensajeSupabase =
-          typeof error.message ===
-          "string"
-            ? error.message
-            : "";
-
-        if (
-          mensajeSupabase.includes(
-            "Ya existe una pre-recepción",
-          )
-        ) {
-          throw new Error(
-            "Ya existe una pre-recepción para este proveedor y número de remito.",
-          );
-        }
-
-        if (
-          mensajeSupabase.includes(
-            "es nuevo",
-          )
-        ) {
-          throw new Error(
-            mensajeSupabase,
-          );
-        }
-
-        lanzarErrorOperativo(
-          error,
-          "No se pudo registrar el envío. Intente nuevamente.",
+      if (
+        mensajeSupabase.includes("Ya existe una pre-recepción")
+      ) {
+        throw new Error(
+          "Ya existe una pre-recepción para este proveedor y número de remito.",
         );
       }
 
-      return {
-        id_envio:
-          idEnvio as unknown as string,
-      };
-    });
+      if (mensajeSupabase.includes("es nuevo")) {
+        throw new Error(mensajeSupabase);
+      }
 
-/*
- * =====================================================
- * LISTAR ENVÍOS PENDIENTES / PARCIALES
- * =====================================================
- */
-
-export const listarPreRecepcionesPendientes =
-  createServerFn({
-    method: "GET",
-  }).handler(async () => {
-    const { supabaseAdmin } =
-      await import(
-        "@/integrations/supabase/client.server"
-      );
-
-    const { data, error } =
-      await supabaseAdmin
-        .from("pre_recepciones")
-        .select(
-          `
-          id_pre_recepcion,
-          id_envio,
-          proveedor,
-          numero_remito,
-          fecha_despacho,
-          codigo_etiqueta,
-          descripcion,
-          cantidad_bobinas,
-          cantidad_por_bobina,
-          observacion,
-          estado,
-          cantidad_bobinas_recibidas,
-          ubicacion_recepcion,
-          fecha_confirmacion,
-          created_at
-        `,
-        )
-        .in("estado", [
-          "PENDIENTE",
-          "PARCIAL",
-        ])
-        .order("fecha_despacho", {
-          ascending: true,
-        })
-        .order("id_pre_recepcion", {
-          ascending: true,
-        });
-
-    if (error) {
       lanzarErrorOperativo(
         error,
-        "No se pudieron consultar las recepciones pendientes.",
+        "No se pudo registrar el envío. Intente nuevamente.",
       );
     }
 
     return {
-      lineas:
-        (data ??
-          []) as unknown as PreRecepcionLinea[],
+      id_envio: idEnvio as unknown as string,
     };
   });
 
 /*
- * =====================================================
+ * LISTAR ENVÍOS PENDIENTES Y PARCIALES
+ */
+
+export const listarPreRecepcionesPendientes = createServerFn({
+  method: "GET",
+}).handler(async () => {
+  const { supabaseAdmin } = await import(
+    "@/integrations/supabase/client.server"
+  );
+
+  const { data, error } = await supabaseAdmin
+    .from("pre_recepciones")
+    .select(
+      `
+      id_pre_recepcion,
+      id_envio,
+      proveedor,
+      numero_remito,
+      fecha_despacho,
+      codigo_etiqueta,
+      descripcion,
+      cantidad_bobinas,
+      cantidad_por_bobina,
+      observacion,
+      estado,
+      cantidad_bobinas_recibidas,
+      ubicacion_recepcion,
+      fecha_confirmacion,
+      created_at
+      `,
+    )
+    .in("estado", ["PENDIENTE", "PARCIAL"])
+    .order("fecha_despacho", { ascending: true })
+    .order("id_pre_recepcion", { ascending: true });
+
+  if (error) {
+    lanzarErrorOperativo(
+      error,
+      "No se pudieron consultar las recepciones pendientes.",
+    );
+  }
+
+  return {
+    lineas: (data ?? []) as unknown as PreRecepcionLinea[],
+  };
+});
+
+/*
  * CONSULTAR UN ENVÍO
- * =====================================================
  */
 
 const envioSchema = z.object({
-  id_envio: z
-    .string()
-    .uuid(),
+  id_envio: z.string().uuid(),
 });
 
-export const consultarPreRecepcionEnvio =
-  createServerFn({
-    method: "POST",
-  })
-    .validator((data: unknown) =>
-      envioSchema.parse(data),
-    )
-    .handler(async ({ data }) => {
-      const { supabaseAdmin } =
-        await import(
-          "@/integrations/supabase/client.server"
-        );
+export const consultarPreRecepcionEnvio = createServerFn({
+  method: "POST",
+})
+  .validator((data: unknown) => envioSchema.parse(data))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import(
+      "@/integrations/supabase/client.server"
+    );
 
-      const { data: rows, error } =
-        await supabaseAdmin
-          .from("pre_recepciones")
-          .select(
-            `
-            id_pre_recepcion,
-            id_envio,
-            proveedor,
-            numero_remito,
-            fecha_despacho,
-            codigo_etiqueta,
-            descripcion,
-            cantidad_bobinas,
-            cantidad_por_bobina,
-            observacion,
-            estado,
-            cantidad_bobinas_recibidas,
-            ubicacion_recepcion,
-            fecha_confirmacion,
-            created_at
-          `,
-          )
-          .eq(
-            "id_envio",
-            data.id_envio,
-          )
-          .order(
-            "id_pre_recepcion",
-            {
-              ascending: true,
-            },
-          );
+    const { data: rows, error } = await supabaseAdmin
+      .from("pre_recepciones")
+      .select(
+        `
+        id_pre_recepcion,
+        id_envio,
+        proveedor,
+        numero_remito,
+        fecha_despacho,
+        codigo_etiqueta,
+        descripcion,
+        cantidad_bobinas,
+        cantidad_por_bobina,
+        observacion,
+        estado,
+        cantidad_bobinas_recibidas,
+        ubicacion_recepcion,
+        fecha_confirmacion,
+        created_at
+        `,
+      )
+      .eq("id_envio", data.id_envio)
+      .order("id_pre_recepcion", { ascending: true });
 
-      if (error) {
-        lanzarErrorOperativo(
-          error,
-          "No se pudo consultar el envío del proveedor.",
-        );
-      }
+    if (error) {
+      lanzarErrorOperativo(
+        error,
+        "No se pudo consultar el envío del proveedor.",
+      );
+    }
 
-      return {
-        lineas:
-          (rows ??
-            []) as unknown as PreRecepcionLinea[],
-      };
-    });
+    return {
+      lineas: (rows ?? []) as unknown as PreRecepcionLinea[],
+    };
+  });
 
 /*
- * =====================================================
- * CONFIRMAR RECEPCIÓN PARCIAL / TOTAL DEL PROVEEDOR
- * =====================================================
+ * CONFIRMAR RECEPCIÓN PARCIAL O TOTAL
  */
 
 const lineaConfirmacionSchema = z.object({
-  id_pre_recepcion: z
+  id_pre_recepcion: z.number().int().positive(),
+
+  cantidad_recibida: z.number().int().min(0).max(100),
+
+  // Si no se envía una corrección, Supabase utiliza
+  // la cantidad declarada originalmente por el proveedor.
+  cantidad_por_bobina: z
     .number()
     .int()
-    .positive(),
+    .positive()
+    .max(1_000_000_000)
+    .nullable()
+    .optional(),
 
-  cantidad_recibida: z
-    .number()
-    .int()
-    .min(0)
-    .max(100),
-
-  ubicacion: z
-    .string()
-    .trim()
-    .max(200),
+  ubicacion: z.string().trim().max(200),
 });
 
-const confirmarRecepcionProveedorSchema =
-  z.object({
-    id_envio: z
-      .string()
-      .uuid(),
+const confirmarRecepcionProveedorSchema = z.object({
+  id_envio: z.string().uuid(),
 
-    operario: z
-      .string()
-      .trim()
-      .max(200),
+  operario: z.string().trim().max(200),
 
-    lineas: z
-      .array(
-        lineaConfirmacionSchema,
-      )
-      .min(1)
-      .max(50),
-  });
+  lineas: z.array(lineaConfirmacionSchema).min(1).max(50),
+});
 
 export type LineaConfirmacionProveedor = {
   id_pre_recepcion: number;
   cantidad_recibida: number;
+  cantidad_por_bobina?: number | null;
   ubicacion: string;
 };
 
@@ -384,145 +272,86 @@ export type DetalleConfirmacionProveedor = {
 
 export type ResultadoConfirmacionProveedor = {
   ok: boolean;
-
   id_envio: string;
-
   cantidad_creada: number;
-
   ids_bobinas: string[];
-
-  detalles:
-    DetalleConfirmacionProveedor[];
+  detalles: DetalleConfirmacionProveedor[];
 };
 
-export const confirmarRecepcionProveedor =
-  createServerFn({
-    method: "POST",
-  })
-    .validator((data: unknown) =>
-      confirmarRecepcionProveedorSchema.parse(
-        data,
-      ),
-    )
-    .handler(async ({ data }) => {
-      const { supabaseAdmin } =
-        await import(
-          "@/integrations/supabase/client.server"
-        );
+export const confirmarRecepcionProveedor = createServerFn({
+  method: "POST",
+})
+  .validator((data: unknown) =>
+    confirmarRecepcionProveedorSchema.parse(data),
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import(
+      "@/integrations/supabase/client.server"
+    );
 
-      const { data: resultado, error } =
-        await supabaseAdmin.rpc(
-          "confirmar_recepcion_proveedor",
-          {
-            p_id_envio:
-              data.id_envio,
+    const { data: resultado, error } = await supabaseAdmin.rpc(
+      "confirmar_recepcion_proveedor",
+      {
+        p_id_envio: data.id_envio,
+        p_operario: data.operario || null,
+        p_lineas: data.lineas,
+      } as never,
+    );
 
-            p_operario:
-              data.operario ||
-              null,
+    if (error) {
+      console.error(
+        "Error confirmando recepción de proveedor:",
+        error,
+      );
 
-            p_lineas:
-              data.lineas,
-          } as never,
-        );
+      const mensajeSupabase =
+        typeof error.message === "string" ? error.message : "";
 
-      if (error) {
-        console.error(
-          "Error confirmando recepción de proveedor:",
-          error,
-        );
+      if (
+        mensajeSupabase.includes("quedan") &&
+        mensajeSupabase.includes("bobinas pendientes")
+      ) {
+        throw new Error(mensajeSupabase);
+      }
 
-        const mensajeSupabase =
-          typeof error.message ===
-          "string"
-            ? error.message
-            : "";
+      if (
+        mensajeSupabase.includes("ya fue recibido completamente")
+      ) {
+        throw new Error(mensajeSupabase);
+      }
 
-        /*
-         * Conservamos los mensajes operativos
-         * generados por nuestra función SQL.
-         */
+      if (mensajeSupabase.includes("Debe indicar la ubicación")) {
+        throw new Error(mensajeSupabase);
+      }
 
-        if (
-          mensajeSupabase.includes(
-            "quedan",
-          ) &&
-          mensajeSupabase.includes(
-            "bobinas pendientes",
-          )
-        ) {
-          throw new Error(
-            mensajeSupabase,
-          );
-        }
-
-        if (
-          mensajeSupabase.includes(
-            "ya fue recibido completamente",
-          )
-        ) {
-          throw new Error(
-            mensajeSupabase,
-          );
-        }
-
-        if (
-          mensajeSupabase.includes(
-            "Debe indicar la ubicación",
-          )
-        ) {
-          throw new Error(
-            mensajeSupabase,
-          );
-        }
-
-        if (
-          mensajeSupabase.includes(
-            "Debe registrar al menos una bobina recibida",
-          )
-        ) {
-          throw new Error(
-            "Debe registrar al menos una bobina recibida.",
-          );
-        }
-
-        if (
-          mensajeSupabase.includes(
-            "No se encontró",
-          )
-        ) {
-          throw new Error(
-            mensajeSupabase,
-          );
-        }
-
-        lanzarErrorOperativo(
-          error,
-          "No se pudo confirmar la recepción del proveedor. Intente nuevamente.",
+      if (
+        mensajeSupabase.includes(
+          "Debe registrar al menos una bobina recibida",
+        )
+      ) {
+        throw new Error(
+          "Debe registrar al menos una bobina recibida.",
         );
       }
 
-      const datos =
-        resultado as unknown as ResultadoConfirmacionProveedor;
+      if (mensajeSupabase.includes("No se encontró")) {
+        throw new Error(mensajeSupabase);
+      }
 
-      return {
-        ok:
-          datos.ok,
+      lanzarErrorOperativo(
+        error,
+        "No se pudo confirmar la recepción del proveedor. Intente nuevamente.",
+      );
+    }
 
-        id_envio:
-          datos.id_envio,
+    const datos =
+      resultado as unknown as ResultadoConfirmacionProveedor;
 
-        cantidad_creada:
-          Number(
-            datos.cantidad_creada,
-          ),
-
-        ids_bobinas:
-          datos.ids_bobinas ??
-          [],
-
-        detalles:
-          datos.detalles ??
-          [],
-      };
-    });
+    return {
+      ok: datos.ok,
+      id_envio: datos.id_envio,
+      cantidad_creada: Number(datos.cantidad_creada),
+      ids_bobinas: datos.ids_bobinas ?? [],
+      detalles: datos.detalles ?? [],
+    };
+  });
