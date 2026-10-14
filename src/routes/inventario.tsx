@@ -531,6 +531,10 @@ function Inventario() {
 
       if (!bobina) return;
 
+      if (!ubicacion.trim()) {
+        return setError("Ingrese la ubicación de la bobina.");
+      }
+
       const cantidadNum =
         Number(cantidad);
 
@@ -899,11 +903,12 @@ function Inventario() {
             htmlFor="ubicacion"
             className="text-base"
           >
-            Ubicación
+            Ubicación (obligatoria)
           </Label>
 
           <Input
             id="ubicacion"
+            required
             className={inputClass}
             value={ubicacion}
             maxLength={200}
