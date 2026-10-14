@@ -2244,7 +2244,7 @@ function Recepcion() {
                           htmlFor={`recibidas-${linea.id_pre_recepcion}`}
                           className="text-base"
                         >
-                          Bobinas recibidas ahora *
+                          Bobinas recibidas
                         </Label>
 
                         <Input
@@ -2278,7 +2278,7 @@ function Recepcion() {
 
                       <div className="space-y-2">
                         <Label htmlFor={`cantidad-bobina-${linea.id_pre_recepcion}`} className="text-base">
-                          Cantidad de etiquetas por bobina (opcional)
+                          Corrección de cantidad por bobina
                         </Label>
                         <Input
                           id={`cantidad-bobina-${linea.id_pre_recepcion}`}
@@ -2295,8 +2295,7 @@ function Recepcion() {
                           })}
                         />
                         <p className="text-sm text-muted-foreground">
-                          Si queda vacío, se utiliza {linea.cantidad_por_bobina} por bobina.
-                          La corrección se aplica a todas las bobinas de este producto que se reciben ahora.
+                          Completar en el caso de que la cantidad por bobina entregada sea erronea.
                         </p>
                       </div>
 
