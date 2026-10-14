@@ -424,11 +424,6 @@ function Recepcion() {
   ] =
     useState("");
 
-  const [
-    operario,
-    setOperario,
-  ] =
-    useState("");
 
   const [
     buscando,
@@ -475,11 +470,6 @@ function Recepcion() {
       >
     >({});
 
-  const [
-    operarioProveedor,
-    setOperarioProveedor,
-  ] =
-    useState("");
 
   const [
     enviandoProveedor,
@@ -569,7 +559,6 @@ function Recepcion() {
 
     setProveedor("");
     setUbicacion("");
-    setOperario("");
 
     setBuscando(false);
     setEnviando(false);
@@ -601,10 +590,6 @@ function Recepcion() {
 
       setLineasProveedorFormulario(
         {},
-      );
-
-      setOperarioProveedor(
-        "",
       );
 
       setEnviandoProveedor(
@@ -663,10 +648,6 @@ function Recepcion() {
 
       setExitoProveedor(
         null,
-      );
-
-      setOperarioProveedor(
-        "",
       );
 
       const formulario: Record<
@@ -1084,9 +1065,6 @@ function Recepcion() {
 
               ubicacion:
                 ubicacion.trim(),
-
-              operario:
-                operario.trim(),
             },
           });
 
@@ -1310,9 +1288,6 @@ function Recepcion() {
             data: {
               id_envio:
                 envioSeleccionado.id_envio,
-
-              operario:
-                operarioProveedor.trim(),
 
               lineas:
                 lineasEnviar,
@@ -2106,30 +2081,6 @@ function Recepcion() {
 
         </section>
 
-        <div className="mt-8 space-y-2">
-
-          <Label
-            htmlFor="operario-proveedor"
-            className="text-base"
-          >
-            Operario
-          </Label>
-
-          <Input
-            id="operario-proveedor"
-            className={inputClass}
-            value={
-              operarioProveedor
-            }
-            maxLength={200}
-            onChange={(e) =>
-              setOperarioProveedor(
-                e.target.value,
-              )
-            }
-          />
-
-        </div>
 
         <section className="mt-8">
 
@@ -2691,32 +2642,6 @@ function Recepcion() {
 
           </div>
 
-          <div className="space-y-2">
-
-            <Label
-              htmlFor="operario"
-              className="text-base"
-            >
-              Operario (opcional)
-            </Label>
-
-            <Input
-              id="operario"
-              className={
-                inputClass
-              }
-              value={
-                operario
-              }
-              maxLength={200}
-              onChange={(e) =>
-                setOperario(
-                  e.target.value,
-                )
-              }
-            />
-
-          </div>
 
           {error && (
             <p
