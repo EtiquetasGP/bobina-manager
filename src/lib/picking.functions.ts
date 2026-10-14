@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import { requireOperario } from "@/lib/operario.middleware";
+
 function extraerMensajeError(error: unknown) {
   if (!error || typeof error !== "object") return null;
 
@@ -10,8 +12,14 @@ function extraerMensajeError(error: unknown) {
     hint?: unknown;
   };
 
-  for (const valor of [candidato.message, candidato.details, candidato.hint]) {
-    if (typeof valor === "string" && valor.trim()) return valor.trim();
+  for (const valor of [
+    candidato.message,
+    candidato.details,
+    candidato.hint,
+  ]) {
+    if (typeof valor === "string" && valor.trim()) {
+      return valor.trim();
+    }
   }
 
   return null;
@@ -23,13 +31,24 @@ function lanzarErrorPicking(
   usarDetalle = false,
 ): never {
   console.error(mensaje, error);
-  const detalle = usarDetalle ? extraerMensajeError(error) : null;
+
+  const detalle = usarDetalle
+    ? extraerMensajeError(error)
+    : null;
+
   throw new Error(detalle || mensaje);
 }
 
-type RpcResponse = { data: unknown; error: unknown };
+type RpcResponse = {
+  data: unknown;
+  error: unknown;
+};
+
 type RpcClient = {
-  rpc: (nombre: string, args?: Record<string, unknown>) => Promise<RpcResponse>;
+  rpc: (
+    nombre: string,
+    args?: Record<string, unknown>,
+  ) => Promise<RpcResponse>;
 };
 
 function rpcClient(cliente: unknown): RpcClient {
@@ -112,8 +131,11 @@ export type ResultadoRegistrarPicking = {
   mensaje: string;
 };
 
-export const listarFechasPicking = createServerFn({ method: "GET" }).handler(
-  async () => {
+export const listarFechasPicking = createServerFn({
+  method: "GET",
+})
+  .middleware([requireOperario])
+  .handler(async () => {
     const { supabaseAdmin } = await import(
       "@/integrations/supabase/client.server"
     );
@@ -130,24 +152,27 @@ export const listarFechasPicking = createServerFn({ method: "GET" }).handler(
     }
 
     return (data ?? []) as FechaPicking[];
-  },
-);
+  });
 
 const fechaSchema = z.object({
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
-export const listarPickingFecha = createServerFn({ method: "POST" })
+export const listarPickingFecha = createServerFn({
+  method: "POST",
+})
+  .middleware([requireOperario])
   .validator((data: unknown) => fechaSchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import(
       "@/integrations/supabase/client.server"
     );
 
-    const { data: rows, error } = await rpcClient(supabaseAdmin).rpc(
-      "listar_picking_fecha",
-      { p_fecha: data.fecha },
-    );
+    const { data: rows, error } = await rpcClient(
+      supabaseAdmin,
+    ).rpc("listar_picking_fecha", {
+      p_fecha: data.fecha,
+    });
 
     if (error) {
       lanzarErrorPicking(
@@ -164,20 +189,22 @@ const detalleSchema = z.object({
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
-export const detallePickingWo = createServerFn({ method: "POST" })
+export const detallePickingWo = createServerFn({
+  method: "POST",
+})
+  .middleware([requireOperario])
   .validator((data: unknown) => detalleSchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import(
       "@/integrations/supabase/client.server"
     );
 
-    const { data: rows, error } = await rpcClient(supabaseAdmin).rpc(
-      "detalle_picking_wo",
-      {
-        p_wo: data.wo,
-        p_fecha: data.fecha,
-      },
-    );
+    const { data: rows, error } = await rpcClient(
+      supabaseAdmin,
+    ).rpc("detalle_picking_wo", {
+      p_wo: data.wo,
+      p_fecha: data.fecha,
+    });
 
     if (error) {
       lanzarErrorPicking(
@@ -193,17 +220,21 @@ const bobinaSchema = z.object({
   idBobina: z.string().trim().min(1).max(100),
 });
 
-export const consultarBobinaPicking = createServerFn({ method: "POST" })
+export const consultarBobinaPicking = createServerFn({
+  method: "POST",
+})
+  .middleware([requireOperario])
   .validator((data: unknown) => bobinaSchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import(
       "@/integrations/supabase/client.server"
     );
 
-    const { data: rows, error } = await rpcClient(supabaseAdmin).rpc(
-      "consultar_bobina_picking",
-      { p_id_bobina: data.idBobina.trim().toUpperCase() },
-    );
+    const { data: rows, error } = await rpcClient(
+      supabaseAdmin,
+    ).rpc("consultar_bobina_picking", {
+      p_id_bobina: data.idBobina.trim().toUpperCase(),
+    });
 
     if (error) {
       lanzarErrorPicking(
@@ -213,6 +244,7 @@ export const consultarBobinaPicking = createServerFn({ method: "POST" })
     }
 
     const bobinas = (rows ?? []) as BobinaPicking[];
+
     return bobinas[0] ?? null;
   });
 
@@ -221,20 +253,24 @@ const listarBobinasSchema = z.object({
   limite: z.number().int().min(1).max(100).optional(),
 });
 
-export const listarBobinasPicking = createServerFn({ method: "POST" })
-  .validator((data: unknown) => listarBobinasSchema.parse(data))
+export const listarBobinasPicking = createServerFn({
+  method: "POST",
+})
+  .middleware([requireOperario])
+  .validator((data: unknown) =>
+    listarBobinasSchema.parse(data),
+  )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import(
       "@/integrations/supabase/client.server"
     );
 
-    const { data: rows, error } = await rpcClient(supabaseAdmin).rpc(
-      "listar_bobinas_picking",
-      {
-        p_codigo_etiqueta: data.codigoEtiqueta,
-        p_limite: data.limite ?? 50,
-      },
-    );
+    const { data: rows, error } = await rpcClient(
+      supabaseAdmin,
+    ).rpc("listar_bobinas_picking", {
+      p_codigo_etiqueta: data.codigoEtiqueta,
+      p_limite: data.limite ?? 50,
+    });
 
     if (error) {
       lanzarErrorPicking(
@@ -249,40 +285,56 @@ export const listarBobinasPicking = createServerFn({ method: "POST" })
 const confirmarPickingSchema = z.object({
   wo: z.string().trim().min(1).max(100),
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  operario: z.string().trim().min(1).max(200),
+
+  // Compatibilidad con la pantalla actual.
+  // El nombre enviado no se utiliza en el movimiento.
+  operario: z.string().trim().max(200).optional(),
+
   entregas: z
     .array(
       z.object({
         idBobina: z.string().trim().min(1).max(100),
         idItemPicking: z.number().int().positive(),
         cantidad: z.number().int().positive(),
-        sentidoBobinado: z.string().trim().max(100).nullable().optional(),
+        sentidoBobinado: z
+          .string()
+          .trim()
+          .max(100)
+          .nullable()
+          .optional(),
       }),
     )
     .min(1),
 });
 
-export const confirmarPicking = createServerFn({ method: "POST" })
-  .validator((data: unknown) => confirmarPickingSchema.parse(data))
-  .handler(async ({ data }) => {
+export const confirmarPicking = createServerFn({
+  method: "POST",
+})
+  .middleware([requireOperario])
+  .validator((data: unknown) =>
+    confirmarPickingSchema.parse(data),
+  )
+  .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import(
       "@/integrations/supabase/client.server"
     );
 
-    const { data: resultado, error } = await rpcClient(supabaseAdmin).rpc(
-      "registrar_picking",
-      {
-        p_wo: data.wo,
-        p_fecha: data.fecha,
-        p_operario: data.operario,
-        p_entregas: data.entregas.map((entrega) => ({
-          id_bobina: entrega.idBobina.trim().toUpperCase(),
-          id_item_picking: entrega.idItemPicking,
-          cantidad: entrega.cantidad,
-          sentido_bobinado: entrega.sentidoBobinado ?? null,
-        })),
-      },
-    );
+    const { data: resultado, error } = await rpcClient(
+      supabaseAdmin,
+    ).rpc("registrar_picking", {
+      p_wo: data.wo,
+      p_fecha: data.fecha,
+
+      // Nombre y apellido de la cuenta verificada.
+      p_operario: context.operario,
+
+      p_entregas: data.entregas.map((entrega) => ({
+        id_bobina: entrega.idBobina.trim().toUpperCase(),
+        id_item_picking: entrega.idItemPicking,
+        cantidad: entrega.cantidad,
+        sentido_bobinado: entrega.sentidoBobinado ?? null,
+      })),
+    });
 
     if (error) {
       lanzarErrorPicking(
@@ -297,22 +349,25 @@ export const confirmarPicking = createServerFn({ method: "POST" })
 
 export const obtenerEstadoSyncPicking = createServerFn({
   method: "GET",
-}).handler(async () => {
-  const { supabaseAdmin } = await import(
-    "@/integrations/supabase/client.server"
-  );
-
-  const { data, error } = await rpcClient(supabaseAdmin).rpc(
-    "estado_sync_picking",
-  );
-
-  if (error) {
-    lanzarErrorPicking(
-      error,
-      "No se pudo consultar la última actualización del Picking.",
+})
+  .middleware([requireOperario])
+  .handler(async () => {
+    const { supabaseAdmin } = await import(
+      "@/integrations/supabase/client.server"
     );
-  }
 
-  const rows = (data ?? []) as EstadoSyncPicking[];
-  return rows[0] ?? null;
-});
+    const { data, error } = await rpcClient(supabaseAdmin).rpc(
+      "estado_sync_picking",
+    );
+
+    if (error) {
+      lanzarErrorPicking(
+        error,
+        "No se pudo consultar la última actualización del Picking.",
+      );
+    }
+
+    const rows = (data ?? []) as EstadoSyncPicking[];
+
+    return rows[0] ?? null;
+  });
