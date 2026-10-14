@@ -52,9 +52,32 @@ export const requireOperario = createMiddleware({
       );
     }
 
+    // El nombre se obtiene de los datos administrados
+    // de la cuenta verificada, nunca del formulario.
+    const nombreGuardado: unknown =
+      data.user.app_metadata?.nombre_operario;
+
+    const nombreOperario =
+      typeof nombreGuardado === "string"
+        ? nombreGuardado.trim()
+        : "";
+
+    if (!nombreOperario) {
+      throw new Error(
+        "Esta cuenta todavía no tiene asignado el nombre y apellido del operario.",
+      );
+    }
+
+    if (nombreOperario.length > 200) {
+      throw new Error(
+        "El nombre del operario supera el máximo de 200 caracteres.",
+      );
+    }
+
     return next({
       context: {
-        operario: data.user.id,
+        operario: nombreOperario,
+        operarioId: data.user.id,
       },
     });
   });
