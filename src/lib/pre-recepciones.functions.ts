@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import { requireOperario } from "@/lib/operario.middleware";
+
 function lanzarErrorOperativo(
   error: unknown,
   mensaje: string,
@@ -67,6 +69,7 @@ export type PreRecepcionLinea = {
   created_at: string;
 };
 
+// El portal externo del proveedor conserva su funcionamiento.
 export const registrarPreRecepcionEnvio = createServerFn({
   method: "POST",
 })
@@ -122,47 +125,49 @@ export const registrarPreRecepcionEnvio = createServerFn({
 
 export const listarPreRecepcionesPendientes = createServerFn({
   method: "GET",
-}).handler(async () => {
-  const { supabaseAdmin } = await import(
-    "@/integrations/supabase/client.server"
-  );
-
-  const { data, error } = await supabaseAdmin
-    .from("pre_recepciones")
-    .select(
-      `
-      id_pre_recepcion,
-      id_envio,
-      proveedor,
-      numero_remito,
-      fecha_despacho,
-      codigo_etiqueta,
-      descripcion,
-      cantidad_bobinas,
-      cantidad_por_bobina,
-      observacion,
-      estado,
-      cantidad_bobinas_recibidas,
-      ubicacion_recepcion,
-      fecha_confirmacion,
-      created_at
-      `,
-    )
-    .in("estado", ["PENDIENTE", "PARCIAL"])
-    .order("fecha_despacho", { ascending: true })
-    .order("id_pre_recepcion", { ascending: true });
-
-  if (error) {
-    lanzarErrorOperativo(
-      error,
-      "No se pudieron consultar las recepciones pendientes.",
+})
+  .middleware([requireOperario])
+  .handler(async () => {
+    const { supabaseAdmin } = await import(
+      "@/integrations/supabase/client.server"
     );
-  }
 
-  return {
-    lineas: (data ?? []) as unknown as PreRecepcionLinea[],
-  };
-});
+    const { data, error } = await supabaseAdmin
+      .from("pre_recepciones")
+      .select(
+        `
+        id_pre_recepcion,
+        id_envio,
+        proveedor,
+        numero_remito,
+        fecha_despacho,
+        codigo_etiqueta,
+        descripcion,
+        cantidad_bobinas,
+        cantidad_por_bobina,
+        observacion,
+        estado,
+        cantidad_bobinas_recibidas,
+        ubicacion_recepcion,
+        fecha_confirmacion,
+        created_at
+        `,
+      )
+      .in("estado", ["PENDIENTE", "PARCIAL"])
+      .order("fecha_despacho", { ascending: true })
+      .order("id_pre_recepcion", { ascending: true });
+
+    if (error) {
+      lanzarErrorOperativo(
+        error,
+        "No se pudieron consultar las recepciones pendientes.",
+      );
+    }
+
+    return {
+      lineas: (data ?? []) as unknown as PreRecepcionLinea[],
+    };
+  });
 
 /*
  * CONSULTAR UN ENVÍO
@@ -175,6 +180,7 @@ const envioSchema = z.object({
 export const consultarPreRecepcionEnvio = createServerFn({
   method: "POST",
 })
+  .middleware([requireOperario])
   .validator((data: unknown) => envioSchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import(
@@ -221,28 +227,38 @@ export const consultarPreRecepcionEnvio = createServerFn({
  * CONFIRMAR RECEPCIÓN PARCIAL O TOTAL
  */
 
-const lineaConfirmacionSchema = z.object({
-  id_pre_recepcion: z.number().int().positive(),
+const lineaConfirmacionSchema = z
+  .object({
+    id_pre_recepcion: z.number().int().positive(),
 
-  cantidad_recibida: z.number().int().min(0).max(100),
+    cantidad_recibida: z.number().int().min(0).max(100),
 
-  // Si no se envía una corrección, Supabase utiliza
-  // la cantidad declarada originalmente por el proveedor.
-  cantidad_por_bobina: z
-    .number()
-    .int()
-    .positive()
-    .max(1_000_000_000)
-    .nullable()
-    .optional(),
+    cantidad_por_bobina: z
+      .number()
+      .int()
+      .positive()
+      .max(1_000_000_000)
+      .nullable()
+      .optional(),
 
-  ubicacion: z.string().trim().max(200),
-});
+    ubicacion: z.string().trim().max(200),
+  })
+  .superRefine((linea, ctx) => {
+    if (linea.cantidad_recibida > 0 && !linea.ubicacion) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["ubicacion"],
+        message: "Debe indicar la ubicación del producto recibido.",
+      });
+    }
+  });
 
 const confirmarRecepcionProveedorSchema = z.object({
   id_envio: z.string().uuid(),
 
-  operario: z.string().trim().max(200),
+  // Compatibilidad temporal con la pantalla actual.
+  // Este valor no se utiliza para identificar al operario.
+  operario: z.string().trim().max(200).optional(),
 
   lineas: z.array(lineaConfirmacionSchema).min(1).max(50),
 });
@@ -256,7 +272,6 @@ export type LineaConfirmacionProveedor = {
 
 export type DetalleConfirmacionProveedor = {
   id_pre_recepcion: number;
-
   codigo_etiqueta: string;
 
   cantidad_declarada: number;
@@ -281,10 +296,19 @@ export type ResultadoConfirmacionProveedor = {
 export const confirmarRecepcionProveedor = createServerFn({
   method: "POST",
 })
+  .middleware([requireOperario])
   .validator((data: unknown) =>
     confirmarRecepcionProveedorSchema.parse(data),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    if (
+      !data.lineas.some((linea) => linea.cantidad_recibida > 0)
+    ) {
+      throw new Error(
+        "Debe registrar al menos una bobina recibida.",
+      );
+    }
+
     const { supabaseAdmin } = await import(
       "@/integrations/supabase/client.server"
     );
@@ -293,7 +317,10 @@ export const confirmarRecepcionProveedor = createServerFn({
       "confirmar_recepcion_proveedor",
       {
         p_id_envio: data.id_envio,
-        p_operario: data.operario || null,
+
+        // Nombre y apellido de la cuenta verificada.
+        p_operario: context.operario,
+
         p_lineas: data.lineas,
       } as never,
     );
@@ -321,6 +348,14 @@ export const confirmarRecepcionProveedor = createServerFn({
       }
 
       if (mensajeSupabase.includes("Debe indicar la ubicación")) {
+        throw new Error(mensajeSupabase);
+      }
+
+      if (
+        mensajeSupabase.includes(
+          "La cantidad de etiquetas por bobina",
+        )
+      ) {
         throw new Error(mensajeSupabase);
       }
 
