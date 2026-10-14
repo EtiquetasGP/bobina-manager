@@ -136,6 +136,7 @@ type EnvioPendiente = {
 
 type LineaRecepcionProveedorFormulario = {
   cantidad_recibida: string;
+  cantidad_por_bobina: string;
   ubicacion: string;
 };
 
@@ -704,6 +705,7 @@ function Recepcion() {
               pendientes,
             ),
 
+          cantidad_por_bobina: "",
           ubicacion:
             linea.ubicacion_recepcion ??
             "",
@@ -1002,6 +1004,13 @@ function Recepcion() {
         null,
       );
 
+      if (!proveedor.trim()) {
+        return setError("Ingrese el proveedor.");
+      }
+      if (!ubicacion.trim()) {
+        return setError("Ingrese la ubicación.");
+      }
+
       const codigoLimpio =
         codigo.trim();
 
@@ -1201,6 +1210,17 @@ function Recepcion() {
           );
         }
 
+        if (!formulario.cantidad_recibida.trim()) {
+          return setErrorProveedor(`Complete las bobinas recibidas de ${linea.codigo_etiqueta}.`);
+        }
+        const cantidadCorregida = formulario.cantidad_por_bobina.trim()
+          ? Number(formulario.cantidad_por_bobina) : null;
+        if (cantidadCorregida !== null && (
+          !Number.isInteger(cantidadCorregida) || cantidadCorregida <= 0 || cantidadCorregida > 1_000_000_000
+        )) {
+          return setErrorProveedor(`La cantidad por bobina de ${linea.codigo_etiqueta} debe ser un entero entre 1 y 1.000.000.000.`);
+        }
+
         const cantidadRecibida =
           Number(
             formulario.cantidad_recibida,
@@ -1256,6 +1276,7 @@ function Recepcion() {
           cantidadRecibida;
 
         lineasEnviar.push({
+          cantidad_por_bobina: cantidadRecibida > 0 ? cantidadCorregida : null,
           id_pre_recepcion:
             linea.id_pre_recepcion,
 
@@ -2223,11 +2244,12 @@ function Recepcion() {
                           htmlFor={`recibidas-${linea.id_pre_recepcion}`}
                           className="text-base"
                         >
-                          Bobinas recibidas ahora
+                          Bobinas recibidas ahora *
                         </Label>
 
                         <Input
                           id={`recibidas-${linea.id_pre_recepcion}`}
+                          required
                           className={inputClass}
                           type="number"
                           min={0}
@@ -2255,6 +2277,30 @@ function Recepcion() {
                       </div>
 
                       <div className="space-y-2">
+                        <Label htmlFor={`cantidad-bobina-${linea.id_pre_recepcion}`} className="text-base">
+                          Cantidad de etiquetas por bobina (opcional)
+                        </Label>
+                        <Input
+                          id={`cantidad-bobina-${linea.id_pre_recepcion}`}
+                          className={inputClass}
+                          type="number"
+                          min={1}
+                          max={1_000_000_000}
+                          step={1}
+                          inputMode="numeric"
+                          placeholder={String(linea.cantidad_por_bobina)}
+                          value={formulario?.cantidad_por_bobina ?? ""}
+                          onChange={(e) => actualizarLineaProveedor(linea.id_pre_recepcion, {
+                            cantidad_por_bobina: e.target.value,
+                          })}
+                        />
+                        <p className="text-sm text-muted-foreground">
+                          Si queda vacío, se utiliza {linea.cantidad_por_bobina} por bobina.
+                          La corrección se aplica a todas las bobinas de este producto que se reciben ahora.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
 
                         <Label
                           htmlFor={`ubicacion-${linea.id_pre_recepcion}`}
@@ -2265,6 +2311,7 @@ function Recepcion() {
 
                         <Input
                           id={`ubicacion-${linea.id_pre_recepcion}`}
+                          required={Number(formulario?.cantidad_recibida) > 0}
                           className={inputClass}
                           value={
                             formulario?.ubicacion ??
@@ -2593,11 +2640,12 @@ function Recepcion() {
                 htmlFor="proveedor"
                 className="text-base"
               >
-                Proveedor (opcional)
+                Proveedor *
               </Label>
 
               <Input
                 id="proveedor"
+                required
                 className={
                   inputClass
                 }
@@ -2620,11 +2668,12 @@ function Recepcion() {
                 htmlFor="ubicacion"
                 className="text-base"
               >
-                Ubicación (opcional)
+                Ubicación *
               </Label>
 
               <Input
                 id="ubicacion"
+                required
                 className={
                   inputClass
                 }
