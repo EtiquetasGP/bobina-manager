@@ -197,8 +197,6 @@ function Inventario() {
   const [ubicacion, setUbicacion] =
     useState("");
 
-  const [operario, setOperario] =
-    useState("");
 
   const [observacion, setObservacion] =
     useState("");
@@ -254,7 +252,6 @@ function Inventario() {
 
     setCantidad("");
     setUbicacion("");
-    setOperario("");
     setObservacion("");
 
     setImprimiendo(false);
@@ -563,9 +560,6 @@ function Inventario() {
               ubicacion:
                 ubicacion.trim(),
 
-              operario:
-                operario.trim(),
-
               observacion:
                 observacion.trim(),
             },
@@ -731,9 +725,6 @@ function Inventario() {
 
               ubicacion:
                 ubicacion.trim(),
-
-              operario:
-                operario.trim(),
 
               observacion:
                 observacion.trim(),
@@ -918,29 +909,6 @@ function Inventario() {
             maxLength={200}
             onChange={(e) =>
               setUbicacion(
-                e.target.value,
-              )
-            }
-          />
-
-        </div>
-
-        <div className="space-y-2">
-
-          <Label
-            htmlFor="operario"
-            className="text-base"
-          >
-            Operario
-          </Label>
-
-          <Input
-            id="operario"
-            className={inputClass}
-            value={operario}
-            maxLength={200}
-            onChange={(e) =>
-              setOperario(
                 e.target.value,
               )
             }
@@ -1649,31 +1617,6 @@ function Inventario() {
                 maxLength={200}
                 onChange={(e) =>
                   setUbicacion(
-                    e.target.value,
-                  )
-                }
-              />
-
-            </div>
-
-            <div className="space-y-2">
-
-              <Label
-                htmlFor="operario"
-                className="text-base"
-              >
-                Operario
-              </Label>
-
-              <Input
-                id="operario"
-                className={inputClass}
-                value={
-                  operario
-                }
-                maxLength={200}
-                onChange={(e) =>
-                  setOperario(
                     e.target.value,
                   )
                 }
