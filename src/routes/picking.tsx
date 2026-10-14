@@ -221,7 +221,6 @@ function Picking() {
   >({});
   const [mensaje, setMensaje] = useState<string | null>(null);
 
-  const [operario, setOperario] = useState("");
   const [entregas, setEntregas] = useState<EntregaPreparada[]>([]);
   const [escaneos, setEscaneos] = useState<Record<number, string>>({});
   const [bobinasActivas, setBobinasActivas] = useState<Record<number, BobinaPicking | undefined>>({});
@@ -232,10 +231,6 @@ function Picking() {
   const [cargandoSelector, setCargandoSelector] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
 
-  useEffect(() => {
-    const guardado = window.localStorage.getItem("picking_operario");
-    if (guardado) setOperario(guardado);
-  }, []);
 
   const limpiarPreparacion = () => {
     setEntregas([]);
@@ -545,10 +540,6 @@ const consultarEscaneo = async (item: ItemPicking) => {
   const confirmarWo = async () => {
     if (!seleccionada) return;
 
-    if (!operario.trim()) {
-      setError("Ingrese el nombre del operario antes de confirmar el Picking.");
-      return;
-    }
 
     if (entregas.length === 0) {
       setError("No hay bobinas preparadas para confirmar.");
@@ -569,7 +560,6 @@ const consultarEscaneo = async (item: ItemPicking) => {
         data: {
           wo: seleccionada.wo,
           fecha: seleccionada.fecha_programada,
-          operario: operario.trim(),
           entregas: entregas.map((entrega) => ({
             idBobina: entrega.bobina.id_bobina,
             idItemPicking: entrega.idItemPicking,
@@ -579,7 +569,6 @@ const consultarEscaneo = async (item: ItemPicking) => {
         },
       });
 
-      window.localStorage.setItem("picking_operario", operario.trim());
 
       const [detalleActualizado, ordenesActualizadas] = await Promise.all([
         cargarDetalleFn({
@@ -986,16 +975,7 @@ const consultarEscaneo = async (item: ItemPicking) => {
 
             {!woYaEntregada && normalizarEstado(seleccionada.estado_plan) === "ACTIVA" && (
               <div className="mt-6 rounded-xl border border-border bg-muted/30 p-4">
-                <div className="grid gap-4 sm:grid-cols-[minmax(220px,360px)_1fr_auto] sm:items-end">
-                  <label className="space-y-2">
-                    <span className="text-sm font-bold">Operario</span>
-                    <Input
-                      value={operario}
-                      onChange={(e) => setOperario(e.target.value)}
-                      placeholder="Nombre del operario"
-                      className="h-11"
-                    />
-                  </label>
+                <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
 
                   <div className="text-sm">
                     <p className="font-bold">
@@ -1013,8 +993,7 @@ const consultarEscaneo = async (item: ItemPicking) => {
                     disabled={
                       confirmando ||
                       !todosCubiertos ||
-                      entregas.length === 0 ||
-                      !operario.trim()
+                      entregas.length === 0
                     }
                     onClick={() => void confirmarWo()}
                     className="h-11"
