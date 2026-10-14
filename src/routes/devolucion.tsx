@@ -88,7 +88,6 @@ function Devolucion() {
 
   const [cantidad, setCantidad] = useState("");
   const [linea, setLinea] = useState("");
-  const [operario, setOperario] = useState("");
   const [ubicacion, setUbicacion] = useState("");
   const [observacion, setObservacion] = useState("");
 
@@ -105,7 +104,6 @@ function Devolucion() {
     setBobina(null);
     setCantidad("");
     setLinea("");
-    setOperario("");
     setUbicacion("");
     setObservacion("");
     setError(null);
@@ -179,7 +177,6 @@ function Devolucion() {
           id_bobina: idBobina,
           cantidad: cantidadNum,
           linea: linea.trim(),
-          operario: operario.trim(),
           ubicacion: ubicacion.trim(),
           observacion: observacion.trim(),
         },
@@ -205,8 +202,7 @@ function Devolucion() {
           actualizada?.ubicacion ?? ubicacion.trim(),
         ),
         operario: texto(
-          actualizada?.ultimo_operario_devolucion ??
-            operario.trim(),
+          actualizada?.ultimo_operario_devolucion,
         ),
       });
     } catch (e) {
@@ -472,24 +468,6 @@ function Devolucion() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label
-                  htmlFor="operario"
-                  className="text-base"
-                >
-                  Operario
-                </Label>
-
-                <Input
-                  id="operario"
-                  className={inputClass}
-                  value={operario}
-                  maxLength={200}
-                  onChange={(e) =>
-                    setOperario(e.target.value)
-                  }
-                />
-              </div>
 
               <div className="space-y-2">
                 <Label
