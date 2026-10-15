@@ -27,6 +27,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { InventarioConteo } from "@/components/inventario-conteo";
 
 export const Route = createFileRoute("/inventario")({
   component: Inventario,
@@ -130,6 +131,50 @@ type Modo =
   | "alta";
 
 function Inventario() {
+  const [opcion, setOpcion] = useState<"menu" | "ajuste" | "conteo">("menu");
+
+  if (opcion === "conteo") {
+    return <InventarioConteo onVolver={() => setOpcion("menu")} />;
+  }
+
+  if (opcion === "ajuste") {
+    return (
+      <>
+        <div className="mx-auto max-w-3xl px-6 pt-6">
+          <Button type="button" variant="outline" onClick={() => setOpcion("menu")}>
+            Volver a opciones de Inventario
+          </Button>
+        </div>
+        <AjustarCantidad />
+      </>
+    );
+  }
+
+  return (
+    <main className="mx-auto max-w-3xl px-6 py-10">
+      <Link to="/" className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="size-4" aria-hidden="true" />
+        Menú principal
+      </Link>
+      <h1 className="mt-6 text-3xl font-bold tracking-tight">Inventario</h1>
+      <p className="mt-2 text-muted-foreground">Seleccione la tarea que desea realizar.</p>
+      <div className="mt-8 grid gap-5">
+        <button type="button" onClick={() => setOpcion("ajuste")}
+          className="rounded-xl border border-border bg-card p-6 text-left shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <span className="block text-2xl font-semibold">Ajustar cantidad</span>
+          <span className="mt-2 block text-muted-foreground">Registrar la cantidad física y la ubicación de una bobina, o dar de alta una bobina sin registrar.</span>
+        </button>
+        <button type="button" onClick={() => setOpcion("conteo")}
+          className="rounded-xl border border-border bg-card p-6 text-left shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <span className="block text-2xl font-semibold">Inventario</span>
+          <span className="mt-2 block text-muted-foreground">Seleccionar un sector, escanear bobinas y consultar las diferencias al finalizar.</span>
+        </button>
+      </div>
+    </main>
+  );
+}
+
+function AjustarCantidad() {
   const consultar =
     useServerFn(consultarBobina);
 
@@ -1271,7 +1316,7 @@ function Inventario() {
         {volverMenu}
 
         <h1 className="mt-6 text-3xl font-bold tracking-tight">
-          INVENTARIO
+          AJUSTAR CANTIDAD
         </h1>
 
         <section className="mt-8 rounded-xl border border-border bg-card p-5">
@@ -1403,7 +1448,7 @@ function Inventario() {
         {volverMenu}
 
         <h1 className="mt-6 text-3xl font-bold tracking-tight">
-          INVENTARIO
+          AJUSTAR CANTIDAD
         </h1>
 
         <p className="mt-1 text-base text-muted-foreground">
@@ -1714,7 +1759,7 @@ function Inventario() {
       {volverMenu}
 
       <h1 className="mt-6 text-3xl font-bold tracking-tight">
-        INVENTARIO
+        AJUSTAR CANTIDAD
       </h1>
 
       <div className="mt-8 space-y-2">
