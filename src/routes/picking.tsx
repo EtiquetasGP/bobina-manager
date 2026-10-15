@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ChevronRight,
@@ -14,18 +14,26 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  confirmarPicking,
+  iniciarPreparacionPicking,
+  obtenerPreparacionPicking,
+  agregarBobinaPreparacionPicking,
+  quitarBobinaPreparacionPicking,
+  marcarPreparacionPickingLista,
+  reabrirPreparacionPicking,
+  entregarPreparacionPicking,
   consultarBobinaPicking,
   detallePickingWo,
   listarBobinasPicking,
   listarFechasPicking,
-  listarPickingFecha,
+  listarPickingFechaPreparacion,
   obtenerEstadoSyncPicking,
   type BobinaPicking,
   type EstadoSyncPicking,
   type FechaPicking,
   type ItemPicking,
-  type OrdenPicking,
+  type OrdenPickingPreparacion,
+  type PreparacionPicking,
+  type DetallePreparacionPicking,
 } from "@/lib/picking.functions";
 
 export const Route = createFileRoute("/picking")({
@@ -52,6 +60,8 @@ function normalizarLineaFiltro(valor: string | null | undefined) {
 }
 
 type EntregaPreparada = {
+  idDetalle: string;
+  sentidoBobinado: string | null;
   idItemPicking: number;
   bobina: BobinaPicking;
   cantidad: number;
@@ -163,17 +173,17 @@ function validarBobinaContraItem(bobina: BobinaPicking, item: ItemPicking) {
 
 function EstadoBadge({ estado }: { estado: string }) {
   const e = normalizarEstado(estado);
-  if (e === "ENTREGADA" || e === "PREPARADA" || e === "COMPLETO") {
+  if (e === "ENTREGADA" || e === "LISTA" || e === "COMPLETO") {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-600/25 bg-emerald-600/10 px-3 py-1 text-xs font-bold text-emerald-700">
         <CircleCheck className="size-4" /> {e}
       </span>
     );
   }
-  if (e === "EN PREPARACION") {
+  if (e === "EN PREPARACION" || e === "PARCIAL") {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-600/25 bg-amber-600/10 px-3 py-1 text-xs font-bold text-amber-700">
-        <Clock3 className="size-4" /> EN PREPARACIÓN
+        <Clock3 className="size-4" /> PARCIAL
       </span>
     );
   }
@@ -207,18 +217,28 @@ function seleccionarFechaInicial(fechas: FechaPicking[]) {
 
 function Picking() {
   const cargarFechasFn = useServerFn(listarFechasPicking);
-  const cargarOrdenesFn = useServerFn(listarPickingFecha);
+  const cargarOrdenesFn = useServerFn(listarPickingFechaPreparacion);
   const cargarDetalleFn = useServerFn(detallePickingWo);
   const cargarSyncFn = useServerFn(obtenerEstadoSyncPicking);
   const consultarBobinaFn = useServerFn(consultarBobinaPicking);
   const listarBobinasFn = useServerFn(listarBobinasPicking);
-  const confirmarPickingFn = useServerFn(confirmarPicking);
+  const iniciarFn = useServerFn(iniciarPreparacionPicking);
+  const recuperarFn = useServerFn(obtenerPreparacionPicking);
+  const agregarFn = useServerFn(agregarBobinaPreparacionPicking);
+  const quitarFn = useServerFn(quitarBobinaPreparacionPicking);
+  const listaFn = useServerFn(marcarPreparacionPickingLista);
+  const reabrirFn = useServerFn(reabrirPreparacionPicking);
+  const entregarFn = useServerFn(entregarPreparacionPicking);
+  const operacionRef = useRef(false);
+  const [preparacion, setPreparacion] = useState<PreparacionPicking | null>(null);
+  const [desactualizado, setDesactualizado] = useState(false);
+  const [sentidos, setSentidos] = useState<Record<number, string>>({});
 
   const [fechas, setFechas] = useState<FechaPicking[]>([]);
   const [fecha, setFecha] = useState("");
   const [lineaFiltro, setLineaFiltro] = useState("TODAS");
-  const [ordenes, setOrdenes] = useState<OrdenPicking[]>([]);
-  const [seleccionada, setSeleccionada] = useState<OrdenPicking | null>(null);
+  const [ordenes, setOrdenes] = useState<OrdenPickingPreparacion[]>([]);
+  const [seleccionada, setSeleccionada] = useState<OrdenPickingPreparacion | null>(null);
   const [items, setItems] = useState<ItemPicking[]>([]);
   const [sync, setSync] = useState<EstadoSyncPicking | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -242,6 +262,9 @@ function Picking() {
 
 
   const limpiarPreparacion = () => {
+    setPreparacion(null);
+    setDesactualizado(false);
+    setSentidos({});
     setEntregas([]);
     setEscaneos({});
     setBobinasActivas({});
@@ -264,6 +287,7 @@ function Picking() {
       setSync(syncRes);
       const inicial = seleccionarFechaInicial(fechasRes);
       setFecha(inicial);
+      if (inicial === fecha && inicial) setOrdenes(await cargarOrdenesFn({ data: { fecha: inicial } }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo cargar Picking.");
     } finally {
@@ -310,21 +334,120 @@ function Picking() {
     };
   }, [fecha]);
 
-  const abrirWo = async (orden: OrdenPicking) => {
+  const aplicarDetalle = (detalle: DetallePreparacionPicking) => {
+    const pr = detalle.preparacion;
+    setPreparacion(pr);
+    setItems(detalle.insumos.map((item) => ({
+      ...item,
+      cantidad_entregada: pr.estado === "ENTREGADA" ? Number(item.cantidad_preparada) : 0,
+      cantidad_faltante: Number(item.cantidad_pendiente_preparar),
+      estado_item: item.estado_plan !== "ACTIVA" ? item.estado_plan
+        : Number(item.cantidad_pendiente_preparar) === 0 ? "COMPLETO"
+        : Number(item.cantidad_preparada) > 0 ? "PARCIAL" : "PENDIENTE",
+    })));
+    setEntregas(detalle.bobinas.map((d) => ({
+      idDetalle: d.id_detalle,
+      idItemPicking: d.id_item_picking,
+      cantidad: Number(d.cantidad),
+      sentidoBobinado: d.sentido_bobinado,
+      bobina: d.bobina_actual ?? {
+        id_bobina: d.id_bobina,
+        codigo_etiqueta: String(d.insumo_snapshot.codigo_etiqueta ?? ""),
+        descripcion: String(d.insumo_snapshot.descripcion ?? ""),
+        cantidad_actual: Number(d.cantidad),
+        fecha_ingreso: "", proveedor: null, ubicacion: null, estado: null,
+        año: null, alcohol: null, vx: null, cliente: null,
+      },
+    })));
+    setSeleccionada((actual) => actual ? { ...actual,
+      id_preparacion: pr.id_preparacion,
+      estado_preparacion: pr.estado,
+      fecha_lista: pr.fecha_lista,
+      operario_lista_nombre: pr.operario_lista_nombre,
+      fecha_entrega: pr.fecha_entrega,
+      operario_entrega_nombre: pr.operario_entrega_nombre,
+    } : actual);
+    setDesactualizado(false);
+  };
+
+  const refrescarPreparacion = async (id: string, fechaOrden: string) => {
+    const detalle = await recuperarFn({ data: { idPreparacion: id } });
+    aplicarDetalle(detalle);
+    const rows = await cargarOrdenesFn({ data: { fecha: fechaOrden } });
+    setOrdenes(rows);
+  };
+
+  const abrirWo = async (orden: OrdenPickingPreparacion) => {
     setSeleccionada(orden);
     setItems([]);
     setCargandoDetalle(true);
     setError(null);
     limpiarPreparacion();
     try {
-      const rows = await cargarDetalleFn({
-        data: { wo: orden.wo, fecha: orden.fecha_programada },
-      });
-      setItems(rows);
+      if (!orden.id_preparacion && orden.estado_preparacion !== "PENDIENTE") {
+        const rows = await cargarDetalleFn({ data: { wo: orden.wo, fecha: orden.fecha_programada } });
+        setItems(rows.filter((item) => item.linea === orden.linea));
+        setMensaje("Esta orden tiene movimientos del circuito anterior. Se muestra para consulta.");
+        return;
+      }
+      let id = orden.id_preparacion;
+      if (!id) {
+        if (orden.estado_plan !== "ACTIVA" || !orden.linea) {
+          const rows = await cargarDetalleFn({ data: { wo: orden.wo, fecha: orden.fecha_programada } });
+          setItems(rows.filter((item) => item.linea === orden.linea));
+          return;
+        }
+        const inicio = await iniciarFn({ data: {
+          wo: orden.wo, fecha: orden.fecha_programada, linea: orden.linea,
+        } });
+        id = inicio.preparacion.id_preparacion;
+      }
+      aplicarDetalle(await recuperarFn({ data: { idPreparacion: id } }));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo cargar el detalle de la WO.");
+      setDesactualizado(true);
+      setError(e instanceof Error ? e.message : "No se pudo abrir la preparación.");
     } finally {
       setCargandoDetalle(false);
+    }
+  };
+
+  const ejecutarCambio = async (accion: () => Promise<{ mensaje: string }>) => {
+    if (!preparacion || operacionRef.current || desactualizado) return;
+    operacionRef.current = true;
+    setConfirmando(true);
+    setError(null);
+    setMensaje(null);
+    let guardado = false;
+    try {
+      const resultado = await accion();
+      guardado = true;
+      setMensaje(resultado.mensaje);
+      await refrescarPreparacion(preparacion.id_preparacion, preparacion.fecha_programada);
+    } catch (e) {
+      setDesactualizado(true);
+      setError((guardado ? "El cambio quedó guardado, pero no se pudo actualizar la pantalla. " : "")
+        + (e instanceof Error ? e.message : "No se pudo completar la operación.")
+        + " Presione Actualizar preparación antes de continuar.");
+    } finally {
+      operacionRef.current = false;
+      setConfirmando(false);
+    }
+  };
+
+  const actualizarDetalle = async () => {
+    if (!seleccionada || operacionRef.current) return;
+    if (!preparacion) { await abrirWo(seleccionada); return; }
+    operacionRef.current = true;
+    setConfirmando(true);
+    setError(null);
+    try {
+      await refrescarPreparacion(preparacion.id_preparacion, preparacion.fecha_programada);
+    } catch (e) {
+      setDesactualizado(true);
+      setError(e instanceof Error ? e.message : "No se pudo actualizar la preparación.");
+    } finally {
+      operacionRef.current = false;
+      setConfirmando(false);
     }
   };
 
@@ -341,16 +464,15 @@ function Picking() {
 
   const todosCubiertos = useMemo(() => {
     if (items.length === 0) return false;
-    return items.every((item) => {
+    return items.filter((item) => item.estado_plan === "ACTIVA").every((item) => {
       const preparado = preparadoPorItem.get(item.id_item_picking) ?? 0;
       return item.cantidad_entregada + preparado >= item.cantidad_requerida;
     });
   }, [items, preparadoPorItem]);
 
-  const woYaEntregada = useMemo(() => {
-    if (items.length === 0) return false;
-    return items.every((item) => item.cantidad_entregada >= item.cantidad_requerida);
-  }, [items]);
+  const woYaEntregada = preparacion
+    ? preparacion.estado === "ENTREGADA"
+    : seleccionada?.estado_preparacion === "ENTREGADA";
 
   const bobinasUsadas = useMemo(
     () => new Set(entregas.map((entrega) => entrega.bobina.id_bobina)),
@@ -488,123 +610,44 @@ const consultarEscaneo = async (item: ItemPicking) => {
     }
   };
 
-  const agregarEntrega = (item: ItemPicking) => {
+  const agregarEntrega = async (item: ItemPicking) => {
     const bobina = bobinasActivas[item.id_item_picking];
-    if (!bobina) {
-      setError("Primero escanee o seleccione una bobina.");
-      return;
-    }
-
+    if (!bobina || !preparacion) return;
     const validacion = validarBobinaContraItem(bobina, item);
-    if (validacion) {
-      setError(validacion);
+    if (validacion) { setError(validacion); return; }
+    const cantidad = Number(cantidades[item.id_item_picking]);
+    if (!Number.isInteger(cantidad) || cantidad <= 0 || cantidad > 1_000_000_000
+      || cantidad > bobina.cantidad_actual) {
+      setError("Ingrese una cantidad entera válida que no supere la disponible.");
       return;
     }
-
-    const cantidadTexto = String(cantidades[item.id_item_picking] ?? "").trim();
-    const cantidad = Number(cantidadTexto);
-
-    if (!Number.isInteger(cantidad) || cantidad <= 0) {
-      setError("La cantidad entregada debe ser un número entero mayor a cero.");
-      return;
-    }
-
-    if (cantidad > bobina.cantidad_actual) {
-      setError(
-        `La bobina ${bobina.id_bobina} tiene ${nf.format(bobina.cantidad_actual)} disponibles y se intentan entregar ${nf.format(cantidad)}.`,
-      );
-      return;
-    }
-
-    if (bobinasUsadas.has(bobina.id_bobina)) {
-      setError(`La bobina ${bobina.id_bobina} ya fue agregada a esta preparación.`);
-      return;
-    }
-
-    setEntregas((actual) => [
-      ...actual,
-      {
+    await ejecutarCambio(async () => {
+      const resultado = await agregarFn({ data: {
+        idPreparacion: preparacion.id_preparacion,
         idItemPicking: item.id_item_picking,
-        bobina,
+        idBobina: bobina.id_bobina,
         cantidad,
-      },
-    ]);
-
-    setBobinasActivas((actual) => {
-      const siguiente = { ...actual };
-      delete siguiente[item.id_item_picking];
-      return siguiente;
+        sentidoBobinado: sentidos[item.id_item_picking]?.trim() || null,
+      } });
+      setBobinasActivas((actual) => { const nuevo = { ...actual }; delete nuevo[item.id_item_picking]; return nuevo; });
+      setCantidades((actual) => ({ ...actual, [item.id_item_picking]: "" }));
+      setEscaneos((actual) => ({ ...actual, [item.id_item_picking]: "" }));
+      setSentidos((actual) => ({ ...actual, [item.id_item_picking]: "" }));
+      return resultado;
     });
-    setCantidades((actual) => ({ ...actual, [item.id_item_picking]: "" }));
-    setEscaneos((actual) => ({ ...actual, [item.id_item_picking]: "" }));
-    setError(null);
   };
 
-  const quitarEntrega = (idBobina: string) => {
-    setEntregas((actual) => actual.filter((entrega) => entrega.bobina.id_bobina !== idBobina));
-    setError(null);
-    setMensaje(null);
+  const quitarEntrega = async (idDetalle: string) => {
+    if (!preparacion) return;
+    await ejecutarCambio(() => quitarFn({ data: {
+      idPreparacion: preparacion.id_preparacion, idDetalle,
+    } }));
   };
 
-  const confirmarWo = async () => {
-    if (!seleccionada) return;
-
-
-    if (entregas.length === 0) {
-      setError("No hay bobinas preparadas para confirmar.");
-      return;
-    }
-
-    if (!todosCubiertos) {
-      setError("No se puede confirmar: todavía hay insumos con cantidad faltante.");
-      return;
-    }
-
-    setConfirmando(true);
-    setError(null);
-    setMensaje(null);
-
-    try {
-      const resultado = await confirmarPickingFn({
-        data: {
-          wo: seleccionada.wo,
-          fecha: seleccionada.fecha_programada,
-          entregas: entregas.map((entrega) => ({
-            idBobina: entrega.bobina.id_bobina,
-            idItemPicking: entrega.idItemPicking,
-            cantidad: entrega.cantidad,
-            sentidoBobinado: null,
-          })),
-        },
-      });
-
-
-      const [detalleActualizado, ordenesActualizadas] = await Promise.all([
-        cargarDetalleFn({
-          data: { wo: seleccionada.wo, fecha: seleccionada.fecha_programada },
-        }),
-        cargarOrdenesFn({ data: { fecha: seleccionada.fecha_programada } }),
-      ]);
-
-      setItems(detalleActualizado);
-      setOrdenes(ordenesActualizadas);
-
-      const ordenActualizada = ordenesActualizadas.find(
-        (orden) =>
-          orden.wo === seleccionada.wo &&
-          orden.fecha_programada === seleccionada.fecha_programada &&
-          (orden.linea ?? "") === (seleccionada.linea ?? ""),
-      );
-
-      if (ordenActualizada) setSeleccionada(ordenActualizada);
-
-      limpiarPreparacion();
-      setMensaje(resultado.mensaje || "Picking confirmado correctamente.");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo confirmar el Picking.");
-    } finally {
-      setConfirmando(false);
-    }
+  const cambiarEstado = async (accion: "lista" | "reabrir" | "entregar") => {
+    if (!preparacion) return;
+    const funcion = accion === "lista" ? listaFn : accion === "reabrir" ? reabrirFn : entregarFn;
+    await ejecutarCambio(() => funcion({ data: { idPreparacion: preparacion.id_preparacion } }));
   };
 
   const ordenesFiltradas = useMemo(
@@ -631,12 +674,15 @@ const consultarEscaneo = async (item: ItemPicking) => {
 
   if (seleccionada) {
     const editable =
-      normalizarEstado(seleccionada.estado_plan) === "ACTIVA" && !woYaEntregada;
+      normalizarEstado(seleccionada.estado_plan) === "ACTIVA"
+      && Boolean(preparacion) && !woYaEntregada
+      && preparacion?.estado !== "LISTA" && !desactualizado;
 
     return (
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
         <button
           type="button"
+          disabled={confirmando || cargandoDetalle || cargandoBobinaItem !== null || cargandoSelector}
           onClick={() => {
             setSeleccionada(null);
             setItems([]);
@@ -655,7 +701,11 @@ const consultarEscaneo = async (item: ItemPicking) => {
             </p>
             <h1 className="mt-1 text-3xl font-bold tracking-tight">WO {seleccionada.wo}</h1>
           </div>
-          <EstadoBadge estado={seleccionada.estado_preparacion} />
+          <div className="flex flex-wrap items-center gap-3">
+            <EstadoBadge estado={preparacion?.estado ?? seleccionada.estado_preparacion} />
+            <Button variant="outline" disabled={confirmando || cargandoDetalle || cargandoBobinaItem !== null || cargandoSelector}
+              onClick={() => void actualizarDetalle()}>Actualizar preparación</Button>
+          </div>
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -704,6 +754,7 @@ const consultarEscaneo = async (item: ItemPicking) => {
                     <th className="px-4 py-3">VX / Producto</th>
                     <th className="px-4 py-3">Cliente</th>
                     <th className="px-4 py-3 text-right">Requerido</th>
+                    <th className="px-4 py-3 text-right">Preparado</th>
                     <th className="px-4 py-3 text-right">Entregado</th>
                     <th className="px-4 py-3">Estado</th>
                   </tr>
@@ -722,6 +773,7 @@ const consultarEscaneo = async (item: ItemPicking) => {
                       </td>
                       <td className="px-4 py-4">{item.cliente || "—"}</td>
                       <td className="px-4 py-4 text-right text-base font-bold">{nf.format(item.cantidad_requerida)}</td>
+                      <td className="px-4 py-4 text-right text-base font-semibold">{nf.format(preparadoPorItem.get(item.id_item_picking) ?? 0)}</td>
                       <td className="px-4 py-4 text-right text-base font-semibold">{nf.format(item.cantidad_entregada)}</td>
                       <td className="px-4 py-4"><EstadoBadge estado={item.estado_item} /></td>
                     </tr>
@@ -733,12 +785,13 @@ const consultarEscaneo = async (item: ItemPicking) => {
         </section>
 
         {!cargandoDetalle && items.length > 0 && (
-          <section className="mt-5 rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <fieldset disabled={confirmando || cargandoBobinaItem !== null || cargandoSelector}
+            className="mt-5 min-w-0 rounded-2xl border border-border bg-card p-5 shadow-sm">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h2 className="text-lg font-bold">Preparación de bobinas</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Escanee el ID CQ o seleccione una bobina. La operación se registra recién al confirmar toda la WO.
+                  Cada bobina agregada queda guardada y reservada. La salida a línea se registra al presionar ENTREGAR.
                 </p>
               </div>
               {woYaEntregada && <EstadoBadge estado="ENTREGADA" />}
@@ -747,7 +800,7 @@ const consultarEscaneo = async (item: ItemPicking) => {
             <div className="mt-5 space-y-5">
               {items.map((item) => {
                 const preparadoAhora = preparadoPorItem.get(item.id_item_picking) ?? 0;
-                const totalAlConfirmar = item.cantidad_entregada + preparadoAhora;
+                const totalAlConfirmar = woYaEntregada ? item.cantidad_entregada : preparadoAhora;
                 const faltante = Math.max(item.cantidad_requerida - totalAlConfirmar, 0);
                 const bobinaActiva = bobinasActivas[item.id_item_picking];
                 const entregasItem = entregas.filter(
@@ -778,12 +831,12 @@ const consultarEscaneo = async (item: ItemPicking) => {
 
                     <div className="mt-4 grid gap-3 sm:grid-cols-4">
                       <MiniResumen titulo="Requerido" valor={item.cantidad_requerida} />
-                      <MiniResumen titulo="Entregado antes" valor={item.cantidad_entregada} />
-                      <MiniResumen titulo="Preparado ahora" valor={preparadoAhora} />
-                      <MiniResumen titulo="Total al confirmar" valor={totalAlConfirmar} />
+                      <MiniResumen titulo="Entregado" valor={item.cantidad_entregada} />
+                      <MiniResumen titulo="Preparado" valor={preparadoAhora} />
+                      <MiniResumen titulo="Total cubierto" valor={totalAlConfirmar} />
                     </div>
 
-                    {editable && (
+                    {editable && item.estado_plan === "ACTIVA" && (
                       <>
                         <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(260px,1fr)_auto]">
                           <div className="flex gap-2">
@@ -927,7 +980,7 @@ const consultarEscaneo = async (item: ItemPicking) => {
 
                             <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(180px,260px)_auto_1fr] sm:items-end">
                               <label className="space-y-2">
-                                <span className="text-sm font-bold">Cantidad entregada</span>
+                                <span className="text-sm font-bold">Cantidad a preparar</span>
                                 <Input
                                   type="number"
                                   min={1}
@@ -944,7 +997,12 @@ const consultarEscaneo = async (item: ItemPicking) => {
                                   className="h-11"
                                 />
                               </label>
-                              <Button type="button" onClick={() => agregarEntrega(item)}>
+                              <label className="space-y-2">
+                                <span className="text-sm font-bold">Sentido de bobinado (opcional)</span>
+                                <Input maxLength={100} value={sentidos[item.id_item_picking] ?? ""}
+                                  onChange={(e) => setSentidos((actual) => ({ ...actual, [item.id_item_picking]: e.target.value }))} />
+                              </label>
+                              <Button type="button" onClick={() => void agregarEntrega(item)}>
                                 Agregar a preparación
                               </Button>
                             </div>
@@ -957,7 +1015,7 @@ const consultarEscaneo = async (item: ItemPicking) => {
                       <div className="mt-4 space-y-2">
                         <p className="text-sm font-bold">Bobinas preparadas</p>
                         {entregasItem.map((entrega) => {
-                          const parcial = entrega.cantidad < entrega.bobina.cantidad_actual;
+                          const parcial = !woYaEntregada && entrega.cantidad < entrega.bobina.cantidad_actual;
                           return (
                             <div
                               key={entrega.bobina.id_bobina}
@@ -965,20 +1023,20 @@ const consultarEscaneo = async (item: ItemPicking) => {
                             >
                               <div className="text-sm">
                                 <span className="font-mono font-bold">{entrega.bobina.id_bobina}</span>
-                                <span className="ml-3">Entregar {nf.format(entrega.cantidad)}</span>
+                                <span className="ml-3">{woYaEntregada ? "Entregado" : "Preparado"}: {nf.format(entrega.cantidad)} · Sentido: {entrega.sentidoBobinado || "—"}</span>
                                 <span className="ml-3 text-muted-foreground">
                                   {parcial
                                     ? `Parcial · quedan ${nf.format(entrega.bobina.cantidad_actual - entrega.cantidad)}`
-                                    : "Bobina completa → LINEA"}
+                                    : woYaEntregada ? "Entrega registrada" : "Bobina completa → LINEA"}
                                 </span>
                               </div>
-                              <button
+                              {editable && <button
                                 type="button"
-                                onClick={() => quitarEntrega(entrega.bobina.id_bobina)}
+                                onClick={() => void quitarEntrega(entrega.idDetalle)}
                                 className="text-sm font-semibold text-destructive hover:underline"
                               >
                                 Quitar
-                              </button>
+                              </button>}
                             </div>
                           );
                         })}
@@ -989,43 +1047,35 @@ const consultarEscaneo = async (item: ItemPicking) => {
               })}
             </div>
 
-            {!woYaEntregada && normalizarEstado(seleccionada.estado_plan) === "ACTIVA" && (
-              <div className="mt-6 rounded-xl border border-border bg-muted/30 p-4">
-                <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
-
-                  <div className="text-sm">
-                    <p className="font-bold">
-                      {todosCubiertos
-                        ? "Todos los insumos están cubiertos."
-                        : "Complete todos los insumos antes de confirmar."}
-                    </p>
-                    <p className="mt-1 text-muted-foreground">
-                      La base se modifica únicamente al presionar Confirmar Picking.
-                    </p>
-                  </div>
-
-                  <Button
-                    type="button"
-                    disabled={
-                      confirmando ||
-                      !todosCubiertos ||
-                      entregas.length === 0
-                    }
-                    onClick={() => void confirmarWo()}
-                    className="h-11"
-                  >
-                    {confirmando ? (
-                      <span className="flex items-center gap-2">
-                        <Loader2 className="size-4 animate-spin" /> Confirmando…
-                      </span>
-                    ) : (
-                      "Confirmar Picking"
-                    )}
-                  </Button>
+            {entregas.filter((d) => !items.some((item) => item.id_item_picking === d.idItemPicking)).map((d) => (
+              <div key={d.idDetalle} className="mt-4 rounded-lg border border-destructive/30 p-4">
+                <p className="font-semibold">{d.bobina.id_bobina} · {nf.format(d.cantidad)} · El insumo ya no figura en este plan.</p>
+                {editable && <Button variant="outline" onClick={() => void quitarEntrega(d.idDetalle)}>Quitar selección y liberar reserva</Button>}
+              </div>
+            ))}
+            {confirmando && <p role="status" className="mt-4 flex items-center gap-2 text-sm"><Loader2 className="size-4 animate-spin" /> Guardando y actualizando preparación…</p>}
+            {preparacion && !woYaEntregada && seleccionada.estado_plan === "ACTIVA" && (
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-muted/30 p-4">
+                <p className="text-sm font-semibold">{preparacion.estado === "LISTA"
+                  ? "Preparación lista. Confirme la entrega cuando las bobinas salgan a línea."
+                  : todosCubiertos ? "Todos los insumos están cubiertos. Puede marcar Lista."
+                  : "Las selecciones están guardadas. Puede continuar más tarde."}</p>
+                <div className="flex flex-wrap gap-3">
+                  {preparacion.estado === "LISTA" ? <>
+                    <Button variant="outline" disabled={confirmando || desactualizado}
+                      onClick={() => void cambiarEstado("reabrir")}>Corregir preparación</Button>
+                    <Button className="h-14 px-8 text-lg font-bold" disabled={confirmando || desactualizado}
+                      onClick={() => void cambiarEstado("entregar")}>ENTREGAR</Button>
+                  </> : <Button disabled={confirmando || desactualizado || !todosCubiertos || entregas.length === 0
+                    || Object.values(bobinasActivas).some(Boolean)}
+                    onClick={() => void cambiarEstado("lista")}>Marcar Lista</Button>}
                 </div>
               </div>
             )}
-          </section>
+            {preparacion?.fecha_lista && <p className="mt-4 text-sm">Lista: {formatearFechaHora(preparacion.fecha_lista)} · {preparacion.operario_lista_nombre}</p>}
+            {preparacion?.fecha_entrega && <p className="mt-2 text-sm font-semibold">Entrega: {formatearFechaHora(preparacion.fecha_entrega)} · {preparacion.operario_entrega_nombre}</p>}
+
+          </fieldset>
         )}
 
         <section className="mt-5 rounded-2xl border border-border bg-card p-5">
@@ -1153,7 +1203,7 @@ const consultarEscaneo = async (item: ItemPicking) => {
                   <p className="text-xs uppercase text-muted-foreground sm:hidden">{orden.linea || "—"}</p>
                   <p className="text-lg font-bold">WO {orden.wo}</p>
                   <p className="mt-0.5 text-sm text-muted-foreground">
-                    {orden.total_insumos} insumos · {orden.insumos_completos} completos
+                    {orden.total_insumos} insumos · {orden.insumos_preparados} preparados · {orden.insumos_completos} entregados
                   </p>
                 </div>
                 <div className="justify-self-end"><EstadoBadge estado={orden.estado_preparacion} /></div>
