@@ -5,9 +5,12 @@ import { ArrowLeft, CheckCircle2, Loader2 } from "lucide-react";
 
 import {
   consultarBobina,
-  registrarDevolucion,
+  registrarDevolucionConSentido,
   type BobinaFicha,
 } from "@/lib/bobinas.functions";
+import { generarEtiquetaZpl, type ZebraLabelData } from "@/lib/zebra-label";
+import { obtenerImpresoraPredeterminada, enviarZpl } from "@/lib/browser-print";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -60,6 +63,8 @@ type Exito = {
   linea: string;
   ubicacion: string;
   operario: string;
+  sentido_bobinado: string;
+  etiqueta: ZebraLabelData;
 };
 
 const inputClass = "h-14 text-lg";
@@ -72,7 +77,7 @@ const texto = (valor: unknown) =>
 function Devolucion() {
   const router = useRouter();
   const consultar = useServerFn(consultarBobina);
-  const registrar = useServerFn(registrarDevolucion);
+  const registrar = useServerFn(registrarDevolucionConSentido);
 
   const escanerRef = useRef<HTMLInputElement>(null);
   const envioEnCursoRef = useRef(false);
@@ -90,6 +95,32 @@ function Devolucion() {
   const [linea, setLinea] = useState("");
   const [ubicacion, setUbicacion] = useState("");
   const [observacion, setObservacion] = useState("");
+  const [sentidoBobinado, setSentidoBobinado] = useState("");
+  const [imprimiendo, setImprimiendo] = useState(false);
+  const [impresionEnviada, setImpresionEnviada] = useState(false);
+  const [errorImpresion, setErrorImpresion] = useState("");
+  const [avisoRegistro, setAvisoRegistro] = useState("");
+  const impresionRef = useRef(false);
+
+  const imprimirSticker = async (etiqueta: ZebraLabelData) => {
+    if (impresionRef.current) return;
+    impresionRef.current = true;
+    setImprimiendo(true);
+    setErrorImpresion("");
+    setImpresionEnviada(false);
+    try {
+      const impresora = await obtenerImpresoraPredeterminada();
+      // Solo esta devolución usa una copia. Recepción mantiene sus dos stickers.
+      const zpl = generarEtiquetaZpl(etiqueta).replace("^PQ2,0,1,Y", "^PQ1,0,1,Y");
+      await enviarZpl(impresora, zpl);
+      setImpresionEnviada(true);
+    } catch (e) {
+      setErrorImpresion(e instanceof Error ? e.message : "No se pudo enviar el sticker a la impresora.");
+    } finally {
+      impresionRef.current = false;
+      setImprimiendo(false);
+    }
+  };
 
   useEffect(() => {
     if (!bobina && !exito) {
@@ -106,6 +137,10 @@ function Devolucion() {
     setLinea("");
     setUbicacion("");
     setObservacion("");
+    setSentidoBobinado("");
+    setErrorImpresion("");
+    setImpresionEnviada(false);
+    setAvisoRegistro("");
     setError(null);
     setExito(null);
     setEnviando(false);
@@ -150,71 +185,65 @@ function Devolucion() {
 
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-
-    // Protección adicional contra doble registro.
-    if (envioEnCursoRef.current) return;
-
+    if (envioEnCursoRef.current || !bobina) return;
     setError(null);
-
-    if (!bobina) return;
-
     const cantidadNum = Number(cantidad);
-
-    if (!Number.isInteger(cantidadNum) || cantidadNum <= 0) {
-      return setError(
-        "La cantidad devuelta debe ser un número entero positivo.",
-      );
+    if (!Number.isInteger(cantidadNum) || cantidadNum <= 0 || cantidadNum > 1_000_000_000) {
+      return setError("La cantidad devuelta debe ser un entero entre 1 y 1.000.000.000.");
     }
+    if (!linea.trim()) return setError("Ingrese la línea.");
+    if (!ubicacion.trim()) return setError("Ingrese la ubicación.");
+    if (!sentidoBobinado.trim()) return setError("Ingrese el sentido de bobinado.");
 
-    const idBobina = String(bobina.id_bobina);
-
+    const idBobina = bobina.id_bobina;
+    const resumen: Exito = {
+      id_bobina: idBobina,
+      cantidad_actual: String(cantidadNum),
+      linea: linea.trim(),
+      ubicacion: ubicacion.trim(),
+      operario: "Cuenta de la sesión",
+      sentido_bobinado: sentidoBobinado.trim(),
+      etiqueta: {
+        id_bobina: idBobina,
+        codigo_etiqueta: bobina.codigo_etiqueta ?? "",
+        descripcion: bobina.descripcion ?? "",
+        cantidad: cantidadNum,
+      },
+    };
     envioEnCursoRef.current = true;
     setEnviando(true);
-
     try {
-      await registrar({
-        data: {
-          id_bobina: idBobina,
-          cantidad: cantidadNum,
-          linea: linea.trim(),
-          ubicacion: ubicacion.trim(),
-          observacion: observacion.trim(),
-        },
-      });
-
-      const res: { bobina: Bobina | null } = await consultar({
-        data: {
-          id_bobina: idBobina,
-        },
-      });
-
-      const actualizada = res.bobina;
-
-      setExito({
+      await registrar({ data: {
         id_bobina: idBobina,
-        cantidad_actual: texto(
-          actualizada?.cantidad_actual ?? cantidadNum,
-        ),
-        linea: texto(
-          actualizada?.ultima_linea ?? linea.trim(),
-        ),
-        ubicacion: texto(
-          actualizada?.ubicacion ?? ubicacion.trim(),
-        ),
-        operario: texto(
-          actualizada?.ultimo_operario_devolucion,
-        ),
-      });
+        cantidad: cantidadNum,
+        linea: resumen.linea,
+        ubicacion: resumen.ubicacion,
+        sentido_bobinado: resumen.sentido_bobinado,
+        observacion: observacion.trim(),
+      } });
     } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "No se pudo registrar la devolución.",
-      );
-    } finally {
       envioEnCursoRef.current = false;
       setEnviando(false);
+      setError(e instanceof Error ? e.message : "No se pudo registrar la devolución.");
+      return;
     }
+
+    // La devolución ya está guardada. Los errores de consulta o impresión
+    // no vuelven a habilitar el registro del movimiento.
+    setExito(resumen);
+    setEnviando(false);
+    const impresion = imprimirSticker(resumen.etiqueta);
+    try {
+      const res = await consultar({ data: { id_bobina: idBobina } });
+      if (res.bobina) {
+        setExito({ ...resumen, operario: texto(res.bobina.ultimo_operario_devolucion) });
+      } else {
+        setAvisoRegistro("La devolución está registrada, pero no se pudo recuperar la ficha actualizada.");
+      }
+    } catch {
+      setAvisoRegistro("La devolución está registrada. No se pudo actualizar el nombre en el resumen; no vuelva a registrar el movimiento.");
+    }
+    await impresion;
   };
 
   if (exito) {
@@ -274,12 +303,30 @@ function Devolucion() {
                 {exito.operario}
               </dd>
             </div>
+            <div className="flex justify-between gap-4 border-t border-border pt-2">
+              <dt className="text-muted-foreground">Sentido de bobinado</dt>
+              <dd className="font-semibold">{exito.sentido_bobinado}</dd>
+            </div>
           </dl>
+
+          {avisoRegistro && <p role="status" className="mt-4 rounded-lg bg-muted p-3 text-sm">{avisoRegistro}</p>}
+          <section className="mt-6 rounded-xl border border-border p-4 text-left space-y-3">
+            <h2 className="font-semibold">Sticker exterior actualizado</h2>
+            <p className="text-sm text-muted-foreground">Coloque el sticker nuevo por fuera y conserve el sticker interior como referencia de origen.</p>
+            {imprimiendo && <p role="status">Enviando un sticker a la Zebra…</p>}
+            {impresionEnviada && <p role="status">Se envió 1 sticker a la impresora. Verifique que haya salido correctamente.</p>}
+            {errorImpresion && <p role="alert" className="text-destructive">La devolución ya está guardada. {errorImpresion} Verifique si salió el sticker antes de reintentar.</p>}
+            <Button type="button" variant="outline" disabled={imprimiendo}
+              onClick={() => void imprimirSticker(exito.etiqueta)}>
+              {imprimiendo ? "Enviando…" : impresionEnviada ? "Reimprimir 1 sticker" : "Imprimir / reintentar 1 sticker"}
+            </Button>
+          </section>
 
           <div className="mt-8 flex flex-col gap-3">
             <Button
               size="lg"
               className="h-16 text-xl font-semibold"
+              disabled={imprimiendo}
               onClick={() => {
                 reiniciar();
                 router.invalidate();
@@ -436,6 +483,7 @@ function Devolucion() {
                 className={inputClass}
                 type="number"
                 min={1}
+                max={1_000_000_000}
                 step={1}
                 inputMode="numeric"
                 value={cantidad}
@@ -459,6 +507,7 @@ function Devolucion() {
 
                 <Input
                   id="linea"
+                  required
                   className={inputClass}
                   value={linea}
                   maxLength={200}
@@ -479,6 +528,7 @@ function Devolucion() {
 
                 <Input
                   id="ubicacion"
+                  required
                   className={inputClass}
                   value={ubicacion}
                   maxLength={200}
@@ -486,6 +536,14 @@ function Devolucion() {
                     setUbicacion(e.target.value)
                   }
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="sentido-bobinado" className="text-base">Sentido de bobinado</Label>
+                <Input id="sentido-bobinado" className={inputClass}
+                  required maxLength={100} autoComplete="off"
+                  value={sentidoBobinado}
+                  onChange={(e) => setSentidoBobinado(e.target.value)} />
               </div>
 
               <div className="space-y-2">
