@@ -43,6 +43,14 @@ export const Route = createFileRoute("/picking")({
 
 const nf = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 });
 
+function normalizarLineaFiltro(valor: string | null | undefined) {
+  const linea = String(valor ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase().replace(/[\s._-]/g, "");
+  if (linea === "TM" || linea === "LINEATM" || linea === "LTM") return "TM";
+  const coincidencia = linea.match(/^(?:LINEA|L)?0?([0-2])$/);
+  return coincidencia ? `L${coincidencia[1]}` : linea;
+}
+
 type EntregaPreparada = {
   idItemPicking: number;
   bobina: BobinaPicking;
@@ -208,6 +216,7 @@ function Picking() {
 
   const [fechas, setFechas] = useState<FechaPicking[]>([]);
   const [fecha, setFecha] = useState("");
+  const [lineaFiltro, setLineaFiltro] = useState("TODAS");
   const [ordenes, setOrdenes] = useState<OrdenPicking[]>([]);
   const [seleccionada, setSeleccionada] = useState<OrdenPicking | null>(null);
   const [items, setItems] = useState<ItemPicking[]>([]);
@@ -597,6 +606,13 @@ const consultarEscaneo = async (item: ItemPicking) => {
       setConfirmando(false);
     }
   };
+
+  const ordenesFiltradas = useMemo(
+    () => lineaFiltro === "TODAS" ? ordenes : ordenes.filter(
+      (orden) => normalizarLineaFiltro(orden.linea) === lineaFiltro,
+    ),
+    [ordenes, lineaFiltro],
+  );
 
   const fechaTieneDatos = useMemo(
     () => fechas.find((x) => x.fecha_programada === fecha),
@@ -1050,7 +1066,7 @@ const consultarEscaneo = async (item: ItemPicking) => {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">PICKING</h1>
           <p className="mt-1 text-muted-foreground">
-            Seleccione la fecha para ver las WO que deben prepararse.
+            Seleccione la fecha y la línea para ver las WO que deben prepararse.
           </p>
         </div>
         <Button variant="outline" onClick={() => void cargarInicio()}>
@@ -1058,7 +1074,7 @@ const consultarEscaneo = async (item: ItemPicking) => {
         </Button>
       </div>
 
-      <div className="mt-6 grid gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm sm:grid-cols-[minmax(220px,320px)_1fr] sm:items-end">
+      <div className="mt-6 grid gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm sm:grid-cols-[minmax(180px,240px)_minmax(130px,180px)_1fr] sm:items-end">
         <label className="space-y-2">
           <span className="text-sm font-bold">Fecha programada</span>
           <Input
@@ -1071,10 +1087,22 @@ const consultarEscaneo = async (item: ItemPicking) => {
           />
         </label>
 
+        <label className="space-y-2">
+          <span className="text-sm font-bold">Línea</span>
+          <select className="h-12 w-full rounded-md border border-input bg-background px-3 text-base"
+            value={lineaFiltro} onChange={(e) => setLineaFiltro(e.target.value)}>
+            <option value="TODAS">Todas</option>
+            <option value="L0">L0</option>
+            <option value="L1">L1</option>
+            <option value="L2">L2</option>
+            <option value="TM">TM</option>
+          </select>
+        </label>
+
         <div className="rounded-xl bg-muted/60 px-4 py-3 text-sm">
           <p className="font-semibold">
-            {fechaTieneDatos
-              ? `${fechaTieneDatos.cantidad_wo} WO programadas para ${formatearFecha(fecha)}`
+            {cargandoOrdenes ? "Cargando órdenes…" : fechaTieneDatos
+              ? `${ordenesFiltradas.length} WO para ${formatearFecha(fecha)} · ${lineaFiltro === "TODAS" ? "Todas las líneas" : lineaFiltro}`
               : "No hay WO sincronizadas para la fecha seleccionada."}
           </p>
           <p className="mt-1 text-muted-foreground">
@@ -1101,11 +1129,11 @@ const consultarEscaneo = async (item: ItemPicking) => {
           <p className="flex items-center gap-2 p-6 text-muted-foreground">
             <Loader2 className="size-5 animate-spin" /> Cargando órdenes…
           </p>
-        ) : ordenes.length === 0 ? (
-          <p className="p-6 text-muted-foreground">No hay órdenes para esta fecha.</p>
+        ) : ordenesFiltradas.length === 0 ? (
+          <p className="p-6 text-muted-foreground">No hay órdenes para la fecha y línea seleccionadas.</p>
         ) : (
           <div className="divide-y divide-border">
-            {ordenes.map((orden) => (
+            {ordenesFiltradas.map((orden) => (
               <button
                 key={`${orden.fecha_programada}-${orden.wo}-${orden.linea ?? ""}`}
                 type="button"
