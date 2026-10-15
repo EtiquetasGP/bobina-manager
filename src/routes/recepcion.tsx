@@ -21,12 +21,12 @@ import {
 import {
   buscarEtiqueta,
   consultarBobina,
-  registrarRecepcionMultiple,
+  registrarRecepcionMultipleConDatos,
   type BobinaFicha,
 } from "@/lib/bobinas.functions";
 
 import {
-  confirmarRecepcionProveedor,
+  confirmarRecepcionProveedorConDatos,
   listarPreRecepcionesPendientes,
   type DetalleConfirmacionProveedor,
   type PreRecepcionLinea,
@@ -138,6 +138,8 @@ type LineaRecepcionProveedorFormulario = {
   cantidad_recibida: string;
   cantidad_por_bobina: string;
   ubicacion: string;
+  anio: string;
+  alcohol: string;
 };
 
 const inputClass = "h-14 text-lg";
@@ -185,7 +187,7 @@ function Recepcion() {
 
   const registrar =
     useServerFn(
-      registrarRecepcionMultiple,
+      registrarRecepcionMultipleConDatos,
     );
 
   const listarPendientes =
@@ -195,7 +197,7 @@ function Recepcion() {
 
   const confirmarProveedor =
     useServerFn(
-      confirmarRecepcionProveedor,
+      confirmarRecepcionProveedorConDatos,
     );
 
   /*
@@ -203,6 +205,9 @@ function Recepcion() {
    * NAVEGACIÓN
    * =====================================================
    */
+
+  const [anio, setAnio] = useState("");
+  const [alcohol, setAlcohol] = useState("");
 
   const [
     pantalla,
@@ -557,6 +562,8 @@ function Recepcion() {
 
     setCantidad("");
 
+    setAnio("");
+    setAlcohol("");
     setProveedor("");
     setUbicacion("");
 
@@ -687,6 +694,8 @@ function Recepcion() {
             ),
 
           cantidad_por_bobina: "",
+          anio: "",
+          alcohol: "",
           ubicacion:
             linea.ubicacion_recepcion ??
             "",
@@ -992,6 +1001,13 @@ function Recepcion() {
         return setError("Ingrese la ubicación.");
       }
 
+      if (!anio.trim()) {
+        return setError("Ingrese la añada.");
+      }
+      if (!alcohol.trim()) {
+        return setError("Ingrese el alcohol.");
+      }
+
       const codigoLimpio =
         codigo.trim();
 
@@ -1065,6 +1081,8 @@ function Recepcion() {
 
               ubicacion:
                 ubicacion.trim(),
+              anio: anio.trim(),
+              alcohol: alcohol.trim(),
             },
           });
 
@@ -1250,11 +1268,20 @@ function Recepcion() {
           );
         }
 
+        if (cantidadRecibida > 0 && !formulario.anio.trim()) {
+          return setErrorProveedor(`Ingrese la añada para ${linea.codigo_etiqueta}.`);
+        }
+        if (cantidadRecibida > 0 && !formulario.alcohol.trim()) {
+          return setErrorProveedor(`Ingrese el alcohol para ${linea.codigo_etiqueta}.`);
+        }
+
         totalRecibido +=
           cantidadRecibida;
 
         lineasEnviar.push({
           cantidad_por_bobina: cantidadRecibida > 0 ? cantidadCorregida : null,
+          anio: formulario.anio.trim(),
+          alcohol: formulario.alcohol.trim(),
           id_pre_recepcion:
             linea.id_pre_recepcion,
 
@@ -2251,6 +2278,23 @@ function Recepcion() {
                       </div>
 
                       <div className="space-y-2">
+                        <Label htmlFor={`anio-${linea.id_pre_recepcion}`} className="text-base">Añada</Label>
+                        <Input id={`anio-${linea.id_pre_recepcion}`}
+                          className={inputClass} placeholder="Ej.: 2026" inputMode="numeric"
+                          maxLength={20} required={Number(formulario?.cantidad_recibida) > 0}
+                          value={formulario?.anio ?? ""}
+                          onChange={(e) => actualizarLineaProveedor(linea.id_pre_recepcion, { anio: e.target.value })} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`alcohol-${linea.id_pre_recepcion}`} className="text-base">Alcohol</Label>
+                        <Input id={`alcohol-${linea.id_pre_recepcion}`}
+                          className={inputClass} placeholder="Ej.: 12,5%" inputMode="decimal"
+                          maxLength={30} required={Number(formulario?.cantidad_recibida) > 0}
+                          value={formulario?.alcohol ?? ""}
+                          onChange={(e) => actualizarLineaProveedor(linea.id_pre_recepcion, { alcohol: e.target.value })} />
+                      </div>
+
+                      <div className="space-y-2">
 
                         <Label
                           htmlFor={`ubicacion-${linea.id_pre_recepcion}`}
@@ -2580,6 +2624,21 @@ function Recepcion() {
 
             </div>
 
+          </div>
+
+          <div className="grid gap-6 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="anio-manual" className="text-base">Añada *</Label>
+              <Input id="anio-manual" required className={inputClass}
+                value={anio} onChange={(e) => setAnio(e.target.value)}
+                placeholder="Ej.: 2026" inputMode="numeric" maxLength={20} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="alcohol-manual" className="text-base">Alcohol *</Label>
+              <Input id="alcohol-manual" required className={inputClass}
+                value={alcohol} onChange={(e) => setAlcohol(e.target.value)}
+                placeholder="Ej.: 12,5%" inputMode="decimal" maxLength={30} />
+            </div>
           </div>
 
           <div className="grid gap-6 sm:grid-cols-2">
