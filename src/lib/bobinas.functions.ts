@@ -2,10 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireOperario } from "@/lib/operario.middleware";
 
-function lanzarErrorOperativo(
-  error: unknown,
-  mensaje: string,
-): never {
+function lanzarErrorOperativo(error: unknown, mensaje: string): never {
   console.error(mensaje, error);
   throw new Error(mensaje);
 }
@@ -18,27 +15,12 @@ const recepcionSchema = z.object({
   codigo_etiqueta: z.string().trim().min(1).max(100),
   descripcion: z.string().trim().max(500),
   cantidad: z.number().int().positive().max(1_000_000_000),
-
-  proveedor: z
-    .string()
-    .trim()
-    .min(1, "El proveedor es obligatorio.")
-    .max(200),
-
-  ubicacion: z
-    .string()
-    .trim()
-    .min(1, "La ubicación es obligatoria.")
-    .max(200),
-
-  // Compatibilidad temporal con los formularios actuales.
-  // El nombre enviado no se utiliza para registrar movimientos.
+  proveedor: z.string().trim().min(1, "El proveedor es obligatorio.").max(200),
+  ubicacion: z.string().trim().min(1, "La ubicación es obligatoria.").max(200),
   operario: z.string().trim().max(200).optional(),
 });
 
-export const buscarEtiqueta = createServerFn({
-  method: "POST",
-})
+export const buscarEtiqueta = createServerFn({ method: "POST" })
   .validator((data: unknown) => codigoSchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import(
@@ -64,9 +46,7 @@ export const buscarEtiqueta = createServerFn({
     };
   });
 
-export const registrarRecepcion = createServerFn({
-  method: "POST",
-})
+export const registrarRecepcion = createServerFn({ method: "POST" })
   .middleware([requireOperario])
   .validator((data: unknown) => recepcionSchema.parse(data))
   .handler(async ({ data, context }) => {
@@ -80,8 +60,8 @@ export const registrarRecepcion = createServerFn({
         p_codigo_etiqueta: data.codigo_etiqueta,
         p_descripcion: data.descripcion,
         p_cantidad: data.cantidad,
-        p_proveedor: data.proveedor,
-        p_ubicacion: data.ubicacion,
+        p_proveedor: data.proveedor || null,
+        p_ubicacion: data.ubicacion || null,
         p_operario: context.operario,
       } as never,
     );
@@ -102,13 +82,9 @@ const recepcionMultipleSchema = recepcionSchema.extend({
   cantidad_bobinas: z.number().int().min(1).max(100),
 });
 
-export const registrarRecepcionMultiple = createServerFn({
-  method: "POST",
-})
+export const registrarRecepcionMultiple = createServerFn({ method: "POST" })
   .middleware([requireOperario])
-  .validator((data: unknown) =>
-    recepcionMultipleSchema.parse(data),
-  )
+  .validator((data: unknown) => recepcionMultipleSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import(
       "@/integrations/supabase/client.server"
@@ -123,8 +99,8 @@ export const registrarRecepcionMultiple = createServerFn({
           p_codigo_etiqueta: data.codigo_etiqueta,
           p_descripcion: data.descripcion,
           p_cantidad: data.cantidad,
-          p_proveedor: data.proveedor,
-          p_ubicacion: data.ubicacion,
+          p_proveedor: data.proveedor || null,
+          p_ubicacion: data.ubicacion || null,
           p_operario: context.operario,
         } as never,
       );
@@ -193,9 +169,7 @@ export type BobinaFicha = {
   origen_alta: string | null;
 };
 
-export const consultarBobina = createServerFn({
-  method: "POST",
-})
+export const consultarBobina = createServerFn({ method: "POST" })
   .middleware([requireOperario])
   .validator((data: unknown) => idBobinaSchema.parse(data))
   .handler(async ({ data }) => {
@@ -223,9 +197,7 @@ export const consultarBobina = createServerFn({
     return { bobina };
   });
 
-export const registrarDevolucion = createServerFn({
-  method: "POST",
-})
+export const registrarDevolucion = createServerFn({ method: "POST" })
   .middleware([requireOperario])
   .validator((data: unknown) => devolucionSchema.parse(data))
   .handler(async ({ data, context }) => {
@@ -279,18 +251,15 @@ const altaInventarioSchema = z.object({
   observacion: z.string().trim().max(1000),
 });
 
-const altaInventarioMultipleSchema =
-  altaInventarioSchema.extend({
-    cantidad_bobinas: z.number().int().min(1).max(100),
-  });
+const altaInventarioMultipleSchema = altaInventarioSchema.extend({
+  cantidad_bobinas: z.number().int().min(1).max(100),
+});
 
 export const registrarInventarioExistente = createServerFn({
   method: "POST",
 })
   .middleware([requireOperario])
-  .validator((data: unknown) =>
-    inventarioExistenteSchema.parse(data),
-  )
+  .validator((data: unknown) => inventarioExistenteSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import(
       "@/integrations/supabase/client.server"
@@ -319,13 +288,9 @@ export const registrarInventarioExistente = createServerFn({
     };
   });
 
-export const registrarAltaInventario = createServerFn({
-  method: "POST",
-})
+export const registrarAltaInventario = createServerFn({ method: "POST" })
   .middleware([requireOperario])
-  .validator((data: unknown) =>
-    altaInventarioSchema.parse(data),
-  )
+  .validator((data: unknown) => altaInventarioSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import(
       "@/integrations/supabase/client.server"
@@ -361,9 +326,7 @@ export const registrarAltaInventarioMultiple = createServerFn({
   method: "POST",
 })
   .middleware([requireOperario])
-  .validator((data: unknown) =>
-    altaInventarioMultipleSchema.parse(data),
-  )
+  .validator((data: unknown) => altaInventarioMultipleSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import(
       "@/integrations/supabase/client.server"
@@ -417,4 +380,46 @@ export const registrarAltaInventarioMultiple = createServerFn({
           ? "Bobina dada de alta correctamente."
           : `${data.cantidad_bobinas} bobinas dadas de alta correctamente.`,
     };
+  });
+
+/*
+ * Devolución con sentido de bobinado.
+ * El formulario actualizado utilizará esta función.
+ * registrarDevolucion se conserva durante la transición.
+ */
+const devolucionConSentidoSchema = devolucionSchema.extend({
+  linea: z.string().trim().min(1, "Ingrese la línea.").max(200),
+  ubicacion: z.string().trim().min(1, "Ingrese la ubicación.").max(200),
+  sentido_bobinado: z.string().trim()
+    .min(1, "Ingrese el sentido de bobinado.").max(100),
+});
+
+export const registrarDevolucionConSentido = createServerFn({ method: "POST" })
+  .middleware([requireOperario])
+  .validator((data: unknown) => devolucionConSentidoSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import(
+      "@/integrations/supabase/client.server"
+    );
+    const { data: id, error } = await supabaseAdmin.rpc(
+      "registrar_devolucion_con_sentido",
+      {
+        p_id_bobina: data.id_bobina,
+        p_cantidad: data.cantidad,
+        p_linea: data.linea,
+        p_operario: context.operario,
+        p_ubicacion: data.ubicacion,
+        p_sentido_bobinado: data.sentido_bobinado,
+        p_observacion: data.observacion || null,
+      } as never,
+    );
+    if (error) {
+      const mensaje = typeof error.message === "string" ? error.message : "";
+      if (mensaje.startsWith("Debe ingresar") || mensaje.startsWith("El sentido de bobinado") ||
+          (mensaje.startsWith("La bobina ") && mensaje.endsWith("no existe en el sistema."))) {
+        throw new Error(mensaje);
+      }
+      lanzarErrorOperativo(error, "No se pudo registrar la devolución. Intente nuevamente.");
+    }
+    return { id_bobina: id as unknown as string };
   });
