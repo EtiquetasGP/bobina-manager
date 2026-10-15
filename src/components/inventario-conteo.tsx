@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  listarUbicacionesInventario, iniciarInventario,
+  iniciarInventario,
   registrarEscaneoInventario, finalizarInventario,
-  type UbicacionInventario, type InventarioIniciado,
+  type InventarioIniciado,
   type ResultadoInventario, type BobinaInventario,
 } from "@/lib/inventarios.functions";
 import { Button } from "@/components/ui/button";
@@ -20,11 +20,9 @@ const alcance = (i: InventarioIniciado | ResultadoInventario) =>
 const mensajeError = (e: unknown) => e instanceof Error ? e.message : "No se pudo completar la operación.";
 
 export function InventarioConteo({ onVolver }: Props) {
-  const listar = useServerFn(listarUbicacionesInventario);
   const iniciar = useServerFn(iniciarInventario);
   const escanear = useServerFn(registrarEscaneoInventario);
   const terminar = useServerFn(finalizarInventario);
-  const [ubicaciones, setUbicaciones] = useState<UbicacionInventario[]>([]);
   const [sector, setSector] = useState("");
   const [posicion, setPosicion] = useState("");
   const [altura, setAltura] = useState("");
@@ -70,8 +68,6 @@ export function InventarioConteo({ onVolver }: Props) {
             setAviso("Inventario recuperado. Si hay lecturas pendientes, presione Reintentar lecturas.");
           }
         }
-        const res = await listar();
-        if (vigente) setUbicaciones(res.ubicaciones);
       } catch (e) {
         if (vigente) setError(mensajeError(e));
       } finally {
@@ -80,7 +76,7 @@ export function InventarioConteo({ onVolver }: Props) {
     }
     void cargar();
     return () => { vigente = false; montadoRef.current = false; };
-  }, [listar]);
+  }, []);
 
   useEffect(() => {
     if (inventario && !resultado) inputRef.current?.focus();
@@ -188,9 +184,6 @@ export function InventarioConteo({ onVolver }: Props) {
     finally { bloqueoRef.current = false; setProcesando(false); }
   }
 
-  const sectores = [...new Set(ubicaciones.map(u => u.sector))];
-  const posiciones = [...new Set(ubicaciones.filter(u => u.sector === sector).map(u => u.posicion))];
-  const alturas = [...new Set(ubicaciones.filter(u => u.sector === sector && u.posicion === posicion).map(u => u.altura))];
 
   if (cargando) return <main className="mx-auto max-w-4xl px-6 py-10"><p>Cargando inventario…</p></main>;
 
@@ -219,6 +212,23 @@ export function InventarioConteo({ onVolver }: Props) {
         ].map(([label, value]) => <div key={String(label)} className="rounded-xl border p-4"><p>{label}</p><p className="text-2xl font-bold">{numero(Number(value))}</p></div>)}
       </div>
       <p>Etiquetas registradas en las bobinas faltantes: <strong>{numero(res.resumen.total_etiquetas_faltantes)}</strong></p>
+      <section className="space-y-3 rounded-xl border p-5" aria-labelledby="titulo-faltantes">
+        <h2 id="titulo-faltantes" className="text-xl font-bold">Bobinas faltantes ({res.bobinas_faltantes.length})</h2>
+        {res.bobinas_faltantes.length > 0 ? <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted"><tr>
+              {["ID bobina", "Código etiqueta", "Descripción", "Cantidad registrada", "Ubicación registrada"].map(t => <th key={t} className="p-3 text-left">{t}</th>)}
+            </tr></thead>
+            <tbody>{res.bobinas_faltantes.map(b => <tr key={b.id_bobina} className="border-t">
+              <td className="p-3 font-semibold">{b.id_bobina}</td>
+              <td className="p-3">{texto(b.codigo_etiqueta)}</td>
+              <td className="p-3">{texto(b.descripcion)}</td>
+              <td className="p-3">{numero(b.cantidad_actual)}</td>
+              <td className="p-3">{texto(b.ubicacion)}</td>
+            </tr>)}</tbody>
+          </table>
+        </div> : <p>No hay bobinas faltantes en este inventario.</p>}
+      </section>
       <div className="space-y-2"><Label htmlFor="vista-inventario">Listado</Label>
         <select id="vista-inventario" className="h-12 w-full rounded-md border bg-background px-3" value={vista} onChange={e => setVista(e.target.value)}>
           <option value="escaneadas">Todos los códigos escaneados</option>
@@ -245,23 +255,20 @@ export function InventarioConteo({ onVolver }: Props) {
     <h1 className="text-3xl font-bold">Inventario</h1>
     {error && <p role="alert" className="rounded-xl bg-destructive/10 p-4 text-destructive">{error}</p>}
     {!inventario ? <form onSubmit={comenzar} className="space-y-6">
-      <p>Seleccione el alcance. Puede elegir una opción sugerida o escribir una nueva.</p>
+      <p>Ingrese el sector, la posición y la altura que desea inventariar.</p>
       <div className="grid gap-5 sm:grid-cols-3">
         <div className="space-y-2"><Label htmlFor="sector-inventario">Sector</Label>
-          <Input id="sector-inventario" list="sectores-inventario" required pattern="[A-Za-z]+" placeholder="Ejemplo: B" value={sector} disabled={procesando}
+          <Input id="sector-inventario" autoComplete="off" required pattern="[A-Za-z]+" placeholder="Ejemplo: B" value={sector} disabled={procesando}
             onChange={e => { setSector(e.target.value.toUpperCase()); setPosicion(""); setAltura(""); inicioIdRef.current = null; }} />
-          <datalist id="sectores-inventario">{sectores.map(s => <option key={s} value={s} />)}</datalist>
         </div>
         <div className="space-y-2"><Label htmlFor="posicion-inventario">Posición</Label>
-          <Input id="posicion-inventario" list="posiciones-inventario" pattern="[0-9]+" placeholder="Todas" value={posicion} disabled={procesando}
+          <Input id="posicion-inventario" autoComplete="off" pattern="[0-9]+" placeholder="Todas" value={posicion} disabled={procesando}
             onChange={e => { setPosicion(e.target.value); setAltura(""); inicioIdRef.current = null; }} />
-          <datalist id="posiciones-inventario">{posiciones.map(p => <option key={p} value={p} />)}</datalist>
           <Button type="button" variant="outline" size="sm" disabled={procesando} onClick={() => { setPosicion(""); setAltura(""); inicioIdRef.current = null; }}>Todas</Button>
         </div>
         <div className="space-y-2"><Label htmlFor="altura-inventario">Altura</Label>
-          <Input id="altura-inventario" list="alturas-inventario" pattern="[0-9]+" placeholder="Todas" value={altura} disabled={procesando || !posicion.trim()}
+          <Input id="altura-inventario" autoComplete="off" pattern="[0-9]+" placeholder="Todas" value={altura} disabled={procesando || !posicion.trim()}
             onChange={e => { setAltura(e.target.value); inicioIdRef.current = null; }} />
-          <datalist id="alturas-inventario">{alturas.map(a => <option key={a} value={a} />)}</datalist>
           <Button type="button" variant="outline" size="sm" disabled={procesando} onClick={() => { setAltura(""); inicioIdRef.current = null; }}>Todas</Button>
         </div>
       </div>
