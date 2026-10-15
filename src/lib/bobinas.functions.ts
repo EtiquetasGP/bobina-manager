@@ -423,3 +423,107 @@ export const registrarDevolucionConSentido = createServerFn({ method: "POST" })
     }
     return { id_bobina: id as unknown as string };
   });
+
+// Recepción con añada y alcohol. Se conserva la API anterior durante el cambio de pantalla.
+const recepcionConDatosSchema = recepcionSchema.extend({
+  anio: z.string().trim().min(1, "La añada es obligatoria.").max(20),
+  alcohol: z.string().trim().min(1, "El alcohol es obligatorio.").max(30),
+});
+
+export const registrarRecepcionConDatos = createServerFn({ method: "POST" })
+  .middleware([requireOperario])
+  .validator((data: unknown) => recepcionConDatosSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import(
+      "@/integrations/supabase/client.server"
+    );
+
+    const { data: idBobina, error } = await supabaseAdmin.rpc(
+      "registrar_recepcion_con_datos",
+      {
+        p_codigo_etiqueta: data.codigo_etiqueta,
+        p_descripcion: data.descripcion,
+        p_cantidad: data.cantidad,
+        p_proveedor: data.proveedor || null,
+        p_ubicacion: data.ubicacion || null,
+        p_operario: context.operario,
+        p_anio: data.anio,
+        p_alcohol: data.alcohol,
+      } as never,
+    );
+
+    if (error) {
+      if (typeof error.message === "string" && error.message.startsWith("Debe indicar")) {
+        throw new Error(error.message);
+      }
+      lanzarErrorOperativo(error, "No se pudo registrar la recepción. Intente nuevamente.");
+    }
+
+    return {
+      id_bobina: idBobina as unknown as string,
+    };
+  });
+
+const recepcionMultipleConDatosSchema = recepcionConDatosSchema.extend({
+  cantidad_bobinas: z.number().int().min(1).max(100),
+});
+
+export const registrarRecepcionMultipleConDatos = createServerFn({ method: "POST" })
+  .middleware([requireOperario])
+  .validator((data: unknown) => recepcionMultipleConDatosSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import(
+      "@/integrations/supabase/client.server"
+    );
+
+    const idsBobinas: string[] = [];
+
+    for (let i = 0; i < data.cantidad_bobinas; i++) {
+      const { data: idBobina, error } = await supabaseAdmin.rpc(
+        "registrar_recepcion_con_datos",
+        {
+          p_codigo_etiqueta: data.codigo_etiqueta,
+          p_descripcion: data.descripcion,
+          p_cantidad: data.cantidad,
+          p_proveedor: data.proveedor || null,
+          p_ubicacion: data.ubicacion || null,
+          p_operario: context.operario,
+        p_anio: data.anio,
+        p_alcohol: data.alcohol,
+        } as never,
+      );
+
+      if (error) {
+        console.error(
+          `Error en recepción múltiple después de crear ${idsBobinas.length} bobinas.`,
+          error,
+        );
+
+        return {
+          ok: false,
+          ids_bobinas: idsBobinas,
+          cantidad_solicitada: data.cantidad_bobinas,
+          cantidad_creada: idsBobinas.length,
+          mensaje:
+            idsBobinas.length === 0
+              ? (typeof error.message === "string" && error.message.startsWith("Debe indicar")
+                  ? error.message : "No se pudo registrar ninguna bobina. Intente nuevamente.")
+              : `Se registraron ${idsBobinas.length} de ${data.cantidad_bobinas} bobinas. No vuelva a confirmar la recepción completa. Revise los ID creados antes de continuar.`,
+        };
+      }
+
+      idsBobinas.push(idBobina as unknown as string);
+    }
+
+    return {
+      ok: true,
+      ids_bobinas: idsBobinas,
+      cantidad_solicitada: data.cantidad_bobinas,
+      cantidad_creada: idsBobinas.length,
+      mensaje:
+        data.cantidad_bobinas === 1
+          ? "Bobina registrada correctamente."
+          : `${data.cantidad_bobinas} bobinas registradas correctamente.`,
+    };
+  });
+
