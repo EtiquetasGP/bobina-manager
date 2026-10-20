@@ -574,3 +574,71 @@ export const entregarPreparacionPicking = createServerFn({ method: "POST" })
       "No se pudo registrar la entrega de Picking.",
     );
   });
+
+// División de bobinas: la pantalla nueva utilizará estos puntos de entrada.
+// Las funciones anteriores permanecen disponibles durante el cambio de pantalla.
+export type DivisionBobinaPicking = {
+  id_division: string;
+  id_preparacion: string;
+  id_detalle_preparacion: string;
+  id_bobina_origen: string;
+  id_bobina_remanente: string;
+  id_bobina_salida: string;
+  cantidad_antes: number;
+  cantidad_remanente: number;
+  cantidad_salida: number;
+  fecha_ingreso_original: string;
+  fecha_vencimiento_original: string;
+  datos_bobina_origen: Record<string, unknown>;
+  operario_id: string;
+  operario_nombre: string;
+  fecha_division: string;
+};
+
+export type DivisionBobinaPickingConsultada = DivisionBobinaPicking & {
+  codigo_etiqueta: string | null;
+  descripcion: string | null;
+  anio: string | null;
+  alcohol: string | null;
+  bobina_remanente_actual: BobinaPicking | null;
+  bobina_salida_actual: BobinaPicking | null;
+};
+
+export type ResultadoDivisionesPicking = {
+  ok: boolean;
+  id_preparacion: string;
+  estado: EstadoPreparacionPicking;
+  fecha_entrega: string | null;
+  operario_entrega: string | null;
+  divisiones: DivisionBobinaPickingConsultada[];
+};
+
+export type ResultadoEntregaPickingConDivision = ResultadoPreparacionPicking & {
+  divisiones: DivisionBobinaPicking[];
+};
+
+export const entregarPreparacionPickingConDivision = createServerFn({ method: "POST" })
+  .middleware([requireOperario])
+  .validator((data: unknown) => preparacionSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    return llamarRpcPreparacion<ResultadoEntregaPickingConDivision>(
+      "entregar_preparacion_picking_con_division",
+      {
+        p_id_preparacion: data.idPreparacion,
+        p_operario_id: context.operarioId,
+        p_operario_nombre: context.operario,
+      },
+      "No se pudo registrar la entrega con división de bobinas.",
+    );
+  });
+
+export const consultarDivisionesPreparacionPicking = createServerFn({ method: "POST" })
+  .middleware([requireOperario])
+  .validator((data: unknown) => preparacionSchema.parse(data))
+  .handler(async ({ data }) => {
+    return llamarRpcPreparacion<ResultadoDivisionesPicking>(
+      "consultar_divisiones_preparacion_picking",
+      { p_id_preparacion: data.idPreparacion },
+      "No se pudieron consultar las divisiones de la preparación.",
+    );
+  });
