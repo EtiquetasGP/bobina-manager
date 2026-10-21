@@ -642,3 +642,25 @@ export const consultarDivisionesPreparacionPicking = createServerFn({ method: "P
       "No se pudieron consultar las divisiones de la preparación.",
     );
   });
+
+// Preparar las partes en ALMACEN al marcar Lista.
+// La pantalla utilizará nuevas_divisiones para imprimir solo las recién creadas.
+export type ResultadoListaPickingConDivision = ResultadoPreparacionPicking & {
+  divisiones: DivisionBobinaPicking[];
+  nuevas_divisiones: DivisionBobinaPicking[];
+};
+
+export const marcarPreparacionPickingListaConDivision = createServerFn({ method: "POST" })
+  .middleware([requireOperario])
+  .validator((data: unknown) => preparacionSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    return llamarRpcPreparacion<ResultadoListaPickingConDivision>(
+      "marcar_preparacion_picking_lista_con_division",
+      {
+        p_id_preparacion: data.idPreparacion,
+        p_operario_id: context.operarioId,
+        p_operario_nombre: context.operario,
+      },
+      "No se pudo marcar Lista y preparar las partes de las bobinas.",
+    );
+  });
