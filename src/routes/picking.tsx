@@ -18,7 +18,7 @@ import {
   obtenerPreparacionPicking,
   agregarBobinaPreparacionPicking,
   quitarBobinaPreparacionPicking,
-  marcarPreparacionPickingLista,
+  marcarPreparacionPickingListaConDivision,
   reabrirPreparacionPicking,
   entregarPreparacionPickingConDivision,
   consultarDivisionesPreparacionPicking,
@@ -231,7 +231,7 @@ function Picking() {
   const recuperarFn = useServerFn(obtenerPreparacionPicking);
   const agregarFn = useServerFn(agregarBobinaPreparacionPicking);
   const quitarFn = useServerFn(quitarBobinaPreparacionPicking);
-  const listaFn = useServerFn(marcarPreparacionPickingLista);
+  const listaFn = useServerFn(marcarPreparacionPickingListaConDivision);
   const reabrirFn = useServerFn(reabrirPreparacionPicking);
   const entregarFn = useServerFn(entregarPreparacionPickingConDivision);
   const consultarDivisionesFn = useServerFn(consultarDivisionesPreparacionPicking);
@@ -410,7 +410,7 @@ function Picking() {
     setOrdenes(rows);
   };
 
-  const imprimirPartesDivision = async (idPreparacion: string, objetivo?: { idDivision: string; parte: "remanente" | "salida" }) => {
+  const imprimirPartesDivision = async (idPreparacion: string, objetivo?: { idDivision: string; parte: "remanente" | "salida" }, idsNuevas?: string[]) => {
     if (impresionDivisionRef.current) return;
     impresionDivisionRef.current = true;
     setImprimiendoDivision(true);
@@ -421,6 +421,7 @@ function Picking() {
       setDivisiones(resultado.divisiones);
       const trabajos: { clave: string; etiqueta: ZebraLabelData }[] = [];
       for (const division of resultado.divisiones) {
+        if (idsNuevas && !idsNuevas.includes(division.id_division)) continue;
         for (const parte of ["remanente", "salida"] as const) {
           if (objetivo && (division.id_division !== objetivo.idDivision || parte !== objetivo.parte)) continue;
           const actual = parte === "remanente" ? division.bobina_remanente_actual : division.bobina_salida_actual;
@@ -449,7 +450,7 @@ function Picking() {
       }
     } catch (e) {
       if (claveActual) setEstadosImpresion((actual) => ({ ...actual, [claveActual]: "Envío sin confirmar" }));
-      setErrorImpresionDivision("La entrega ya está registrada. "
+      setErrorImpresionDivision("La preparación quedó guardada. "
         + (e instanceof Error ? e.message : "No se pudo completar la impresión.")
         + " Revise cuáles stickers salieron y use el botón de cada parte para imprimir los que falten.");
     } finally {
@@ -728,18 +729,23 @@ const consultarEscaneo = async (item: ItemPicking) => {
   const cambiarEstado = async (accion: "lista" | "reabrir" | "entregar") => {
     if (!preparacion) return;
     const id = preparacion.id_preparacion;
-    if (accion === "entregar") {
+    if (accion === "lista") {
       await ejecutarCambio(async () => {
-        const resultado = await entregarFn({ data: { idPreparacion: id } });
+        const resultado = await listaFn({ data: { idPreparacion: id } });
         setMensaje(resultado.mensaje);
-        if (!resultado.ya_entregada && resultado.divisiones.length > 0) {
-          await imprimirPartesDivision(id);
+        // Solo se imprimen automáticamente las partes recién creadas.
+        // Reintentar Marcar Lista no vuelve a dividir ni a imprimir.
+        const idsNuevas = resultado.nuevas_divisiones.map((division) => division.id_division);
+        if (idsNuevas.length > 0) {
+          await imprimirPartesDivision(id, undefined, idsNuevas);
         }
         return resultado;
       });
+    } else if (accion === "entregar") {
+      // La impresión se realizó al marcar Lista. Entregar solo registra la salida.
+      await ejecutarCambio(() => entregarFn({ data: { idPreparacion: id } }));
     } else {
-      const funcion = accion === "lista" ? listaFn : reabrirFn;
-      await ejecutarCambio(() => funcion({ data: { idPreparacion: id } }));
+      await ejecutarCambio(() => reabrirFn({ data: { idPreparacion: id } }));
     }
   };
 
@@ -1150,7 +1156,7 @@ const consultarEscaneo = async (item: ItemPicking) => {
             {preparacion && !woYaEntregada && seleccionada.estado_plan === "ACTIVA" && (
               <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-muted/30 p-4">
                 <p className="text-sm font-semibold">{preparacion.estado === "LISTA"
-                  ? "Preparación lista. Confirme la entrega cuando las bobinas salgan a línea."
+                  ? "Preparación lista. Revise los stickers y confirme la entrega cuando las bobinas salgan a línea."
                   : todosCubiertos ? "Todos los insumos están cubiertos. Puede marcar Lista."
                   : "Las selecciones están guardadas. Puede continuar más tarde."}</p>
                 <div className="flex flex-wrap gap-3">
@@ -1174,7 +1180,7 @@ const consultarEscaneo = async (item: ItemPicking) => {
         {(divisiones.length > 0 || errorImpresionDivision || imprimiendoDivision) && (
           <section className="mt-5 rounded-2xl border border-border bg-card p-5">
             <h2 className="text-lg font-bold">Divisiones y stickers</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Se imprimen dos stickers por parte. Reemplace los stickers del remanente con su código y cantidad actualizados. Reimprimir solo envía stickers; no repite la entrega.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Al marcar Lista se imprimen dos stickers por parte. Reemplace los stickers del remanente con su código y cantidad actualizados. Reimprimir solo envía stickers; no repite la preparación ni la entrega.</p>
             {imprimiendoDivision && <p role="status" className="mt-4 flex items-center gap-2"><Loader2 className="size-4 animate-spin" /> Enviando stickers a Zebra…</p>}
             {errorImpresionDivision && <p role="alert" className="mt-4 rounded-lg bg-destructive/10 p-4 text-destructive">{errorImpresionDivision}</p>}
             <div className="mt-4 space-y-4">
@@ -1190,7 +1196,7 @@ const consultarEscaneo = async (item: ItemPicking) => {
                       const cantidadOriginal = parte === "remanente" ? division.cantidad_remanente : division.cantidad_salida;
                       const clave = `${division.id_division}:${parte}`;
                       return <div key={parte} className="rounded-lg bg-muted/50 p-4">
-                        <p className="text-sm font-semibold">{parte === "remanente" ? "Remanente" : "Parte enviada a línea"}</p>
+                        <p className="text-sm font-semibold">{parte === "remanente" ? "Remanente" : preparacion?.estado === "ENTREGADA" ? "Parte enviada a línea" : "Parte preparada para línea"}</p>
                         <p className="mt-1 font-mono text-lg font-bold">{codigo}</p>
                         <p className="mt-1 text-sm">Cantidad al dividir: {nf.format(cantidadOriginal)}</p>
                         <p className="mt-1 text-sm">Cantidad actual: {actual ? nf.format(actual.cantidad_actual) : "Bobina no disponible"} · {actual?.estado || "—"}</p>
