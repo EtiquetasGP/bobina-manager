@@ -133,7 +133,7 @@ export function AccesoOperario({
 
   if (cargando) {
     return (
-      <main className="flex min-h-screen items-center justify-center px-6">
+      <main className="module-screen flex min-h-screen items-center justify-center px-6">
         <p className="text-lg text-muted-foreground">
           Cargando sesión…
         </p>
@@ -144,7 +144,7 @@ export function AccesoOperario({
   if (session) {
     return (
       <>
-        <header className="border-b border-border bg-card">
+        <header className="operator-bar border-b border-border bg-card">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-6 py-4">
             <div>
               <p className="text-sm text-muted-foreground">
@@ -183,7 +183,7 @@ export function AccesoOperario({
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-6 py-10">
+    <main className="module-screen flex min-h-screen items-center justify-center bg-background px-6 py-10">
       <section className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
         <h1 className="text-2xl font-bold tracking-tight">
           Gestión de bobinas

@@ -763,7 +763,7 @@ const consultarEscaneo = async (item: ItemPicking) => {
 
   if (cargando) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-6xl items-center justify-center px-6 py-10">
+      <main className="module-screen mx-auto flex min-h-screen max-w-6xl items-center justify-center px-6 py-10">
         <p className="flex items-center gap-3 text-lg text-muted-foreground">
           <Loader2 className="size-6 animate-spin" /> Cargando Picking…
         </p>
@@ -778,7 +778,7 @@ const consultarEscaneo = async (item: ItemPicking) => {
       && preparacion?.estado !== "LISTA" && !desactualizado;
 
     return (
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <main className="module-screen mx-auto max-w-7xl px-4 py-8 sm:px-6">
         <button
           type="button"
           disabled={confirmando || imprimiendoDivision || cargandoDetalle || cargandoBobinaItem !== null || cargandoSelector}
@@ -1180,7 +1180,7 @@ const consultarEscaneo = async (item: ItemPicking) => {
         {(divisiones.length > 0 || errorImpresionDivision || imprimiendoDivision) && (
           <section className="mt-5 rounded-2xl border border-border bg-card p-5">
             <h2 className="text-lg font-bold">Divisiones y stickers</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Al marcar Lista se imprimen dos stickers por parte. Reemplace los stickers del remanente con su código y cantidad actualizados. Reimprimir solo envía stickers; no repite la preparación ni la entrega.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Al marcar Lista se imprimen dos stickers por parte. Reemplace los stickers del remanente.</p>
             {imprimiendoDivision && <p role="status" className="mt-4 flex items-center gap-2"><Loader2 className="size-4 animate-spin" /> Enviando stickers a Zebra…</p>}
             {errorImpresionDivision && <p role="alert" className="mt-4 rounded-lg bg-destructive/10 p-4 text-destructive">{errorImpresionDivision}</p>}
             <div className="mt-4 space-y-4">
@@ -1240,7 +1240,7 @@ const consultarEscaneo = async (item: ItemPicking) => {
   }
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+    <main className="module-screen mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <Link
         to="/"
         className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
@@ -1251,9 +1251,6 @@ const consultarEscaneo = async (item: ItemPicking) => {
       <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">PICKING</h1>
-          <p className="mt-1 text-muted-foreground">
-            Seleccione la fecha y la línea para ver las WO que deben prepararse.
-          </p>
         </div>
         <Button variant="outline" onClick={() => void cargarInicio()}>
           <RefreshCw className="mr-2 size-4" /> Recargar

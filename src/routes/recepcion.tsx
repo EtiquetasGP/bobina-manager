@@ -47,7 +47,7 @@ export const Route = createFileRoute("/recepcion")({
   component: Recepcion,
 
   errorComponent: () => (
-    <main className="mx-auto max-w-2xl px-6 py-10">
+    <main className="module-screen mx-auto max-w-2xl px-6 py-10">
       <p
         role="alert"
         className="rounded-md bg-destructive/10 p-4 text-base text-destructive"
@@ -58,7 +58,7 @@ export const Route = createFileRoute("/recepcion")({
   ),
 
   notFoundComponent: () => (
-    <main className="mx-auto max-w-2xl px-6 py-10">
+    <main className="module-screen mx-auto max-w-2xl px-6 py-10">
       <p>Pantalla no encontrada.</p>
     </main>
   ),
@@ -1399,7 +1399,7 @@ function Recepcion() {
         0;
 
     return (
-      <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center px-6 py-10">
+      <main className="module-screen mx-auto flex min-h-screen max-w-2xl flex-col justify-center px-6 py-10">
 
         <div className="rounded-xl border border-border bg-card p-8 text-center">
 
@@ -1713,7 +1713,7 @@ function Recepcion() {
         0;
 
     return (
-      <main className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center px-6 py-10">
+      <main className="module-screen mx-auto flex min-h-screen max-w-3xl flex-col justify-center px-6 py-10">
 
         <div className="rounded-xl border border-border bg-card p-8 text-center">
 
@@ -1992,7 +1992,7 @@ function Recepcion() {
       );
 
     return (
-      <main className="mx-auto max-w-3xl px-6 py-10">
+      <main className="module-screen mx-auto max-w-3xl px-6 py-10">
 
         <button
           type="button"
@@ -2429,7 +2429,7 @@ function Recepcion() {
       );
 
     return (
-      <main className="mx-auto max-w-2xl px-6 py-10">
+      <main className="module-screen mx-auto max-w-2xl px-6 py-10">
 
         <button
           type="button"
@@ -2754,7 +2754,7 @@ function Recepcion() {
    */
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-10">
+    <main className="module-screen mx-auto max-w-3xl px-6 py-10">
 
       <Link
         to="/"
@@ -2774,10 +2774,6 @@ function Recepcion() {
         RECEPCIÓN DE BOBINAS
       </h1>
 
-      <p className="mt-1 text-base text-muted-foreground">
-        Seleccione el tipo de recepción que desea realizar.
-      </p>
-
       <section className="mt-8">
 
         <div className="rounded-xl border border-border bg-card p-6">
@@ -2794,10 +2790,6 @@ function Recepcion() {
               <h2 className="text-xl font-bold">
                 NUEVA RECEPCIÓN MANUAL
               </h2>
-
-              <p className="mt-1 text-base text-muted-foreground">
-                Registrar directamente una o varias bobinas que ingresan a Coquimbito.
-              </p>
 
               <Button
                 type="button"
@@ -2827,10 +2819,6 @@ function Recepcion() {
             <h2 className="text-xl font-bold">
               RECEPCIONES PENDIENTES DE PROVEEDORES
             </h2>
-
-            <p className="mt-1 text-sm text-muted-foreground">
-              Envíos declarados por proveedores que todavía deben ser confirmados en Coquimbito.
-            </p>
 
           </div>
 

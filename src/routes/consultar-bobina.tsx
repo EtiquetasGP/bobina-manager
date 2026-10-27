@@ -11,14 +11,14 @@ import { Label } from "@/components/ui/label";
 export const Route = createFileRoute("/consultar-bobina")({
   component: ConsultarBobina,
   errorComponent: () => (
-    <main className="mx-auto max-w-2xl px-6 py-10">
+    <main className="module-screen mx-auto max-w-2xl px-6 py-10">
       <p role="alert" className="rounded-md bg-destructive/10 p-4 text-base text-destructive">
         No se pudo cargar la pantalla de consulta. Recargue la página.
       </p>
     </main>
   ),
   notFoundComponent: () => (
-    <main className="mx-auto max-w-2xl px-6 py-10">
+    <main className="module-screen mx-auto max-w-2xl px-6 py-10">
       <p>Pantalla no encontrada.</p>
     </main>
   ),
@@ -136,7 +136,7 @@ function ConsultarBobina() {
 
   if (bobina) {
     return (
-      <main className="mx-auto max-w-2xl px-6 py-10">
+      <main className="module-screen mx-auto max-w-2xl px-6 py-10">
         <Link
           to="/"
           className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
@@ -185,7 +185,7 @@ function ConsultarBobina() {
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-10">
+    <main className="module-screen mx-auto max-w-2xl px-6 py-10">
       <Link
         to="/"
         className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"

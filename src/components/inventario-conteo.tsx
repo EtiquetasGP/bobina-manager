@@ -384,12 +384,12 @@ export function InventarioConteo({ onVolver }: { onVolver: () => void }) {
   }
   if (cargando)
     return (
-      <main className="mx-auto max-w-4xl p-6">
+      <main className="module-screen mx-auto max-w-4xl p-6">
         <p>Cargando inventario…</p>
       </main>
     );
   return (
-    <main className="mx-auto max-w-6xl space-y-6 px-6 py-8">
+    <main className="module-screen mx-auto max-w-6xl space-y-6 px-6 py-8">
       <Button variant="outline" onClick={volver} disabled={ocupado || enviando}>
         Volver a Inventario
       </Button>

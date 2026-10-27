@@ -33,7 +33,7 @@ export const Route = createFileRoute("/inventario")({
   component: Inventario,
 
   errorComponent: () => (
-    <main className="mx-auto max-w-2xl px-6 py-10">
+    <main className="module-screen mx-auto max-w-2xl px-6 py-10">
       <p
         role="alert"
         className="rounded-md bg-destructive/10 p-4 text-base text-destructive"
@@ -44,7 +44,7 @@ export const Route = createFileRoute("/inventario")({
   ),
 
   notFoundComponent: () => (
-    <main className="mx-auto max-w-2xl px-6 py-10">
+    <main className="module-screen mx-auto max-w-2xl px-6 py-10">
       <p>Pantalla no encontrada.</p>
     </main>
   ),
@@ -151,13 +151,12 @@ function Inventario() {
   }
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-10">
+    <main className="module-screen mx-auto max-w-3xl px-6 py-10">
       <Link to="/" className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
         <ArrowLeft className="size-4" aria-hidden="true" />
         Menú principal
       </Link>
       <h1 className="mt-6 text-3xl font-bold tracking-tight">Inventario</h1>
-      <p className="mt-2 text-muted-foreground">Seleccione la tarea que desea realizar.</p>
       <div className="mt-8 grid gap-5">
         <button type="button" onClick={() => setOpcion("ajuste")}
           className="rounded-xl border border-border bg-card p-6 text-left shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -1023,7 +1022,7 @@ function AjustarCantidad() {
         0;
 
     return (
-      <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center px-6 py-10">
+      <main className="module-screen mx-auto flex min-h-screen max-w-2xl flex-col justify-center px-6 py-10">
 
         <div className="rounded-xl border border-border bg-card p-8 text-center">
 
@@ -1311,7 +1310,7 @@ function AjustarCantidad() {
     bobina
   ) {
     return (
-      <main className="mx-auto max-w-2xl px-6 py-10">
+      <main className="module-screen mx-auto max-w-2xl px-6 py-10">
 
         {volverMenu}
 
@@ -1443,7 +1442,7 @@ function AjustarCantidad() {
       Number(cantidadBobinas);
 
     return (
-      <main className="mx-auto max-w-2xl px-6 py-10">
+      <main className="module-screen mx-auto max-w-2xl px-6 py-10">
 
         {volverMenu}
 
@@ -1754,7 +1753,7 @@ function AjustarCantidad() {
    */
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-10">
+    <main className="module-screen mx-auto max-w-2xl px-6 py-10">
 
       {volverMenu}
 

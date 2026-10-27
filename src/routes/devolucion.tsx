@@ -18,7 +18,7 @@ import { Label } from "@/components/ui/label";
 export const Route = createFileRoute("/devolucion")({
   component: Devolucion,
   errorComponent: () => (
-    <main className="mx-auto max-w-2xl px-6 py-10">
+    <main className="module-screen mx-auto max-w-2xl px-6 py-10">
       <p
         role="alert"
         className="rounded-md bg-destructive/10 p-4 text-base text-destructive"
@@ -28,7 +28,7 @@ export const Route = createFileRoute("/devolucion")({
     </main>
   ),
   notFoundComponent: () => (
-    <main className="mx-auto max-w-2xl px-6 py-10">
+    <main className="module-screen mx-auto max-w-2xl px-6 py-10">
       <p>Pantalla no encontrada.</p>
     </main>
   ),
@@ -248,7 +248,7 @@ function Devolucion() {
 
   if (exito) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center px-6 py-10">
+      <main className="module-screen mx-auto flex min-h-screen max-w-2xl flex-col justify-center px-6 py-10">
         <div className="rounded-xl border border-border bg-card p-8 text-center">
           <CheckCircle2
             className="mx-auto size-16 text-primary"
@@ -352,7 +352,7 @@ function Devolucion() {
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-10">
+    <main className="module-screen mx-auto max-w-2xl px-6 py-10">
       <Link
         to="/"
         className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"

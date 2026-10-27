@@ -8,7 +8,7 @@ export const Route = createFileRoute("/bases-y-reimpresiones")({
 
 function BasesYReimpresiones() {
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
+    <main className="module-screen mx-auto max-w-5xl px-6 py-10">
       <Link to="/" className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
         <ArrowLeft className="size-4" aria-hidden="true" />
         Menú principal
