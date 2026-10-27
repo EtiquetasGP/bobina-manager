@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { PackagePlus, Undo2, Search, ClipboardList, Boxes } from "lucide-react";
+import { PackagePlus, Undo2, Search, ClipboardList, Boxes, Printer } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -28,6 +28,7 @@ const acciones = [
   { label: "CONSULTAR BOBINA", icon: Search, to: "/consultar-bobina" as const, activo: true },
   { label: "INVENTARIO", icon: ClipboardList, to: "/inventario" as const, activo: true },
   { label: "PICKING", icon: Boxes, to: "/picking" as const, activo: true },
+  { label: "BASES Y REIMPRESIONES", icon: Printer, to: "/bases-y-reimpresiones" as const, activo: true },
 ];
 
 function Index() {

@@ -10,14 +10,23 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BasesYReimpresionesRouteImport } from './routes/bases-y-reimpresiones'
 import { Route as ConsultarBobinaRouteImport } from './routes/consultar-bobina'
 import { Route as DevolucionRouteImport } from './routes/devolucion'
 import { Route as InventarioRouteImport } from './routes/inventario'
+import { Route as PickingRouteImport } from './routes/picking'
+import { Route as ProveedorEnvioRouteImport } from './routes/proveedor-envio'
+import { Route as PruebaZebraRouteImport } from './routes/prueba-zebra'
 import { Route as RecepcionRouteImport } from './routes/recepcion'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BasesYReimpresionesRoute = BasesYReimpresionesRouteImport.update({
+  id: '/bases-y-reimpresiones',
+  path: '/bases-y-reimpresiones',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ConsultarBobinaRoute = ConsultarBobinaRouteImport.update({
@@ -35,6 +44,21 @@ const InventarioRoute = InventarioRouteImport.update({
   path: '/inventario',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PickingRoute = PickingRouteImport.update({
+  id: '/picking',
+  path: '/picking',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProveedorEnvioRoute = ProveedorEnvioRouteImport.update({
+  id: '/proveedor-envio',
+  path: '/proveedor-envio',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PruebaZebraRoute = PruebaZebraRouteImport.update({
+  id: '/prueba-zebra',
+  path: '/prueba-zebra',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RecepcionRoute = RecepcionRouteImport.update({
   id: '/recepcion',
   path: '/recepcion',
@@ -43,46 +67,83 @@ const RecepcionRoute = RecepcionRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/bases-y-reimpresiones': typeof BasesYReimpresionesRoute
   '/consultar-bobina': typeof ConsultarBobinaRoute
   '/devolucion': typeof DevolucionRoute
   '/inventario': typeof InventarioRoute
+  '/picking': typeof PickingRoute
+  '/proveedor-envio': typeof ProveedorEnvioRoute
+  '/prueba-zebra': typeof PruebaZebraRoute
   '/recepcion': typeof RecepcionRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/bases-y-reimpresiones': typeof BasesYReimpresionesRoute
   '/consultar-bobina': typeof ConsultarBobinaRoute
   '/devolucion': typeof DevolucionRoute
   '/inventario': typeof InventarioRoute
+  '/picking': typeof PickingRoute
+  '/proveedor-envio': typeof ProveedorEnvioRoute
+  '/prueba-zebra': typeof PruebaZebraRoute
   '/recepcion': typeof RecepcionRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/bases-y-reimpresiones': typeof BasesYReimpresionesRoute
   '/consultar-bobina': typeof ConsultarBobinaRoute
   '/devolucion': typeof DevolucionRoute
   '/inventario': typeof InventarioRoute
+  '/picking': typeof PickingRoute
+  '/proveedor-envio': typeof ProveedorEnvioRoute
+  '/prueba-zebra': typeof PruebaZebraRoute
   '/recepcion': typeof RecepcionRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/consultar-bobina' | '/devolucion' | '/inventario' | '/recepcion'
-  fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/consultar-bobina' | '/devolucion' | '/inventario' | '/recepcion'
-  id:
-    | '__root__'
     | '/'
+    | '/bases-y-reimpresiones'
     | '/consultar-bobina'
     | '/devolucion'
     | '/inventario'
+    | '/picking'
+    | '/proveedor-envio'
+    | '/prueba-zebra'
+    | '/recepcion'
+  fileRoutesByTo: FileRoutesByTo
+  to:
+    | '/'
+    | '/bases-y-reimpresiones'
+    | '/consultar-bobina'
+    | '/devolucion'
+    | '/inventario'
+    | '/picking'
+    | '/proveedor-envio'
+    | '/prueba-zebra'
+    | '/recepcion'
+  id:
+    | '__root__'
+    | '/'
+    | '/bases-y-reimpresiones'
+    | '/consultar-bobina'
+    | '/devolucion'
+    | '/inventario'
+    | '/picking'
+    | '/proveedor-envio'
+    | '/prueba-zebra'
     | '/recepcion'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BasesYReimpresionesRoute: typeof BasesYReimpresionesRoute
   ConsultarBobinaRoute: typeof ConsultarBobinaRoute
   DevolucionRoute: typeof DevolucionRoute
   InventarioRoute: typeof InventarioRoute
+  PickingRoute: typeof PickingRoute
+  ProveedorEnvioRoute: typeof ProveedorEnvioRoute
+  PruebaZebraRoute: typeof PruebaZebraRoute
   RecepcionRoute: typeof RecepcionRoute
 }
 
@@ -93,6 +154,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/bases-y-reimpresiones': {
+      id: '/bases-y-reimpresiones'
+      path: '/bases-y-reimpresiones'
+      fullPath: '/bases-y-reimpresiones'
+      preLoaderRoute: typeof BasesYReimpresionesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/consultar-bobina': {
@@ -116,6 +184,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InventarioRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/picking': {
+      id: '/picking'
+      path: '/picking'
+      fullPath: '/picking'
+      preLoaderRoute: typeof PickingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/proveedor-envio': {
+      id: '/proveedor-envio'
+      path: '/proveedor-envio'
+      fullPath: '/proveedor-envio'
+      preLoaderRoute: typeof ProveedorEnvioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/prueba-zebra': {
+      id: '/prueba-zebra'
+      path: '/prueba-zebra'
+      fullPath: '/prueba-zebra'
+      preLoaderRoute: typeof PruebaZebraRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/recepcion': {
       id: '/recepcion'
       path: '/recepcion'
@@ -128,9 +217,13 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BasesYReimpresionesRoute: BasesYReimpresionesRoute,
   ConsultarBobinaRoute: ConsultarBobinaRoute,
   DevolucionRoute: DevolucionRoute,
   InventarioRoute: InventarioRoute,
+  PickingRoute: PickingRoute,
+  ProveedorEnvioRoute: ProveedorEnvioRoute,
+  PruebaZebraRoute: PruebaZebraRoute,
   RecepcionRoute: RecepcionRoute,
 }
 export const routeTree = rootRouteImport
