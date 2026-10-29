@@ -14,8 +14,8 @@ export const Route = createFileRoute("/")({
   component: Index,
   head: () => ({
     meta: [
-      { title: "Gestión de bobinas | Coquimbito" },
-      { name: "description", content: "Gestión de bobinas de etiquetas en Coquimbito." },
+      { title: "ALMACÉN DE ETIQUETAS | Coquimbito" },
+      { name: "description", content: "Sistema interno del Almacén de Etiquetas en Coquimbito." },
     ],
   }),
 });
@@ -43,7 +43,7 @@ function Index() {
         </div>
         <div>
           <p className="home-eyebrow">Coquimbito</p>
-          <h1>Gestión de bobinas</h1>
+          <h1>ALMACÉN DE ETIQUETAS</h1>
         </div>
       </header>
 
