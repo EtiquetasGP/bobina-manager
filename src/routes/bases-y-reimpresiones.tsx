@@ -8,7 +8,10 @@ export const Route = createFileRoute("/bases-y-reimpresiones")({
 });
 
 type Pedido = {
-  id: string; base: string; descripcion: string; final: string;
+  id: string;
+  base: string;
+  descripcion: string;
+  final: string;
   proveedor: string; planta: string; cantidad: number; enviada: number;
   fecha: string; prioridad: string; observaciones: string;
 };
