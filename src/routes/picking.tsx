@@ -98,39 +98,16 @@ function normalizarCodigo(value: string | null | undefined) {
   return String(value ?? "").trim().toUpperCase();
 }
 
-function normalizarAnio(value: string | null | undefined) {
-  const digitos = String(value ?? "").replace(/\D/g, "");
-  if (!digitos) return "";
-  return digitos.slice(-2);
-}
-
-function normalizarAlcohol(value: string | null | undefined) {
-  let limpio = String(value ?? "")
-    .trim()
-    .replace(",", ".")
-    .replace(/[^0-9.]/g, "");
-
-  limpio = limpio.replace(/\.$/, "");
-
-  if (!limpio) return null;
-
-  const numeroInicial = Number(limpio);
-
-  if (!Number.isFinite(numeroInicial)) return null;
-
-  let numero = numeroInicial;
-
-  if (numero > 0 && numero < 1) {
-    numero = numero * 100;
-  } else if (numero > 30 && numero <= 300) {
-    numero = numero / 10;
-  }
-
-  if (numero <= 0 || numero > 30) {
-    return null;
-  }
-
-  return Math.round(numero * 1000) / 1000;
+function datosDelCodigo(codigo: string) {
+  const sufijo = normalizarCodigo(codigo).match(/-[A-Z]([0-9]{3})([0-9]{2})$/);
+  const alcohol = sufijo?.[1];
+  const anio = sufijo?.[2];
+  return {
+    anio: anio && anio !== "00" ? anio : "—",
+    alcohol: alcohol && alcohol !== "000"
+      ? `${(Number(alcohol) / 10).toLocaleString("es-AR")}%`
+      : "—",
+  };
 }
 
 function validarBobinaContraItem(bobina: BobinaPicking, item: ItemPicking) {
@@ -140,33 +117,6 @@ function validarBobinaContraItem(bobina: BobinaPicking, item: ItemPicking) {
 
   if (normalizarCodigo(bobina.codigo_etiqueta) !== normalizarCodigo(item.codigo_etiqueta)) {
     return `Código incorrecto. Se requiere ${item.codigo_etiqueta} y la bobina contiene ${bobina.codigo_etiqueta}.`;
-  }
-
-  if (!normalizarAnio(bobina.año)) {
-    return `La bobina ${bobina.id_bobina} no tiene añada cargada.`;
-  }
-
-  if (!normalizarAnio(item.año)) {
-    return `El insumo ${item.codigo_etiqueta} no tiene añada definida.`;
-  }
-
-  if (normalizarAnio(bobina.año) !== normalizarAnio(item.año)) {
-    return `Añada incorrecta. Se requiere ${item.año ?? "—"} y la bobina es ${bobina.año ?? "—"}.`;
-  }
-
-  const alcoholBobina = normalizarAlcohol(bobina.alcohol);
-  const alcoholItem = normalizarAlcohol(item.alcohol);
-
-  if (alcoholBobina === null) {
-    return `La bobina ${bobina.id_bobina} no tiene alcohol cargado.`;
-  }
-
-  if (alcoholItem === null) {
-    return `El insumo ${item.codigo_etiqueta} no tiene alcohol definido.`;
-  }
-
-  if (Math.abs(alcoholBobina - alcoholItem) > 0.0001) {
-    return `Alcohol incorrecto. Se requiere ${item.alcohol ?? "—"} y la bobina tiene ${bobina.alcohol ?? "—"}.`;
   }
 
   if (!Number.isFinite(Number(bobina.cantidad_actual)) || Number(bobina.cantidad_actual) <= 0) {
@@ -1025,7 +975,7 @@ const consultarEscaneo = async (item: ItemPicking) => {
                                       <div>
                                         <p className="font-mono font-bold">{bobina.id_bobina}</p>
                                         <p className="text-sm">
-                                          {nf.format(bobina.cantidad_actual)} disponibles · Año {bobina.año || "—"} · Alcohol {bobina.alcohol || "—"}
+                                          {nf.format(bobina.cantidad_actual)} disponibles · Año {datosDelCodigo(bobina.codigo_etiqueta).anio} · Alcohol {datosDelCodigo(bobina.codigo_etiqueta).alcohol}
                                         </p>
                                         <p className="text-xs text-muted-foreground">
                                           {bobina.ubicacion || "Sin ubicación"} · Ingreso {formatearFecha(bobina.fecha_ingreso)}
@@ -1056,10 +1006,10 @@ const consultarEscaneo = async (item: ItemPicking) => {
                               <div>
                                 <p className="font-mono text-lg font-bold">{bobinaActiva.id_bobina}</p>
                                 <p className="mt-1 text-sm">
-                                  Disponible: <strong>{nf.format(bobinaActiva.cantidad_actual)}</strong> · Año {bobinaActiva.año || "—"} · Alcohol {bobinaActiva.alcohol || "—"}
+                                  Disponible: <strong>{nf.format(bobinaActiva.cantidad_actual)}</strong> · Año {datosDelCodigo(bobinaActiva.codigo_etiqueta).anio} · Alcohol {datosDelCodigo(bobinaActiva.codigo_etiqueta).alcohol}
                                 </p>
                                 <p className="mt-1 text-xs font-semibold text-emerald-700">
-                                  Código, añada y alcohol correctos.
+                                  Código de etiqueta correcto.
                                 </p>
                               </div>
                               <button
