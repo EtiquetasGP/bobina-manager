@@ -512,7 +512,7 @@ export const confirmarRecepcionProveedor =
       };
     });
 
-// Añada y alcohol se completan al recibir; el envío público del proveedor no cambia.
+// Añada y alcohol son opcionales al confirmar la recepción interna.
 const lineaConfirmacionConDatosSchema = lineaConfirmacionBaseSchema.extend({
   anio: z.string().trim().max(20).optional(),
   alcohol: z.string().trim().max(30).optional(),
@@ -521,12 +521,7 @@ const lineaConfirmacionConDatosSchema = lineaConfirmacionBaseSchema.extend({
   if (!linea.ubicacion) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["ubicacion"], message: "La ubicación es obligatoria." });
   }
-  if (!linea.anio) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["anio"], message: "La añada es obligatoria." });
-  }
-  if (!linea.alcohol) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["alcohol"], message: "El alcohol es obligatorio." });
-  }
+
 });
 
 const confirmarRecepcionProveedorConDatosSchema = z.object({

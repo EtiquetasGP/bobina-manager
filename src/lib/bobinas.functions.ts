@@ -426,8 +426,8 @@ export const registrarDevolucionConSentido = createServerFn({ method: "POST" })
 
 // Recepción con añada y alcohol. Se conserva la API anterior durante el cambio de pantalla.
 const recepcionConDatosSchema = recepcionSchema.extend({
-  anio: z.string().trim().min(1, "La añada es obligatoria.").max(20),
-  alcohol: z.string().trim().min(1, "El alcohol es obligatorio.").max(30),
+  anio: z.string().trim().max(20),
+  alcohol: z.string().trim().max(30),
 });
 
 export const registrarRecepcionConDatos = createServerFn({ method: "POST" })

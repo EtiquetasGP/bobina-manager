@@ -134,6 +134,18 @@ type EnvioPendiente = {
   lineas: PreRecepcionLinea[];
 };
 
+function sugerirDatosEtiqueta(codigo: string) {
+  const sufijo = codigo.trim().toUpperCase().match(/-[A-Z]([0-9]{3})([0-9]{2})$/);
+  const alcohol = sufijo?.[1];
+  const anio = sufijo?.[2];
+  return {
+    anio: anio && anio !== "00" ? `20${anio}` : "",
+    alcohol: alcohol && alcohol !== "000"
+      ? `${(Number(alcohol) / 10).toLocaleString("es-AR")}%`
+      : "",
+  };
+}
+
 type LineaRecepcionProveedorFormulario = {
   cantidad_recibida: string;
   cantidad_por_bobina: string;
@@ -694,8 +706,7 @@ function Recepcion() {
             ),
 
           cantidad_por_bobina: "",
-          anio: "",
-          alcohol: "",
+          ...sugerirDatosEtiqueta(linea.codigo_etiqueta),
           ubicacion:
             linea.ubicacion_recepcion ??
             "",
@@ -746,6 +757,9 @@ function Recepcion() {
     value: string,
   ) => {
     setCodigo(value);
+    const sugeridos = sugerirDatosEtiqueta(value);
+    setAnio(sugeridos.anio);
+    setAlcohol(sugeridos.alcohol);
 
     setDescripcion("");
 
@@ -1001,12 +1015,6 @@ function Recepcion() {
         return setError("Ingrese la ubicación.");
       }
 
-      if (!anio.trim()) {
-        return setError("Ingrese la añada.");
-      }
-      if (!alcohol.trim()) {
-        return setError("Ingrese el alcohol.");
-      }
 
       const codigoLimpio =
         codigo.trim();
@@ -1266,13 +1274,6 @@ function Recepcion() {
           return setErrorProveedor(
             `Ingrese la ubicación para ${linea.codigo_etiqueta}.`,
           );
-        }
-
-        if (cantidadRecibida > 0 && !formulario.anio.trim()) {
-          return setErrorProveedor(`Ingrese la añada para ${linea.codigo_etiqueta}.`);
-        }
-        if (cantidadRecibida > 0 && !formulario.alcohol.trim()) {
-          return setErrorProveedor(`Ingrese el alcohol para ${linea.codigo_etiqueta}.`);
         }
 
         totalRecibido +=
@@ -2278,18 +2279,18 @@ function Recepcion() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor={`anio-${linea.id_pre_recepcion}`} className="text-base">Añada</Label>
+                        <Label htmlFor={`anio-${linea.id_pre_recepcion}`} className="text-base">Añada (opcional)</Label>
                         <Input id={`anio-${linea.id_pre_recepcion}`}
                           className={inputClass} placeholder="Ej.: 2026" inputMode="numeric"
-                          maxLength={20} required={Number(formulario?.cantidad_recibida) > 0}
+                          maxLength={20}
                           value={formulario?.anio ?? ""}
                           onChange={(e) => actualizarLineaProveedor(linea.id_pre_recepcion, { anio: e.target.value })} />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor={`alcohol-${linea.id_pre_recepcion}`} className="text-base">Alcohol</Label>
+                        <Label htmlFor={`alcohol-${linea.id_pre_recepcion}`} className="text-base">Alcohol (opcional)</Label>
                         <Input id={`alcohol-${linea.id_pre_recepcion}`}
                           className={inputClass} placeholder="Ej.: 12,5%" inputMode="decimal"
-                          maxLength={30} required={Number(formulario?.cantidad_recibida) > 0}
+                          maxLength={30}
                           value={formulario?.alcohol ?? ""}
                           onChange={(e) => actualizarLineaProveedor(linea.id_pre_recepcion, { alcohol: e.target.value })} />
                       </div>
@@ -2628,14 +2629,14 @@ function Recepcion() {
 
           <div className="grid gap-6 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="anio-manual" className="text-base">Añada *</Label>
-              <Input id="anio-manual" required className={inputClass}
+              <Label htmlFor="anio-manual" className="text-base">Añada (opcional)</Label>
+              <Input id="anio-manual" className={inputClass}
                 value={anio} onChange={(e) => setAnio(e.target.value)}
                 placeholder="Ej.: 2026" inputMode="numeric" maxLength={20} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="alcohol-manual" className="text-base">Alcohol *</Label>
-              <Input id="alcohol-manual" required className={inputClass}
+              <Label htmlFor="alcohol-manual" className="text-base">Alcohol (opcional)</Label>
+              <Input id="alcohol-manual" className={inputClass}
                 value={alcohol} onChange={(e) => setAlcohol(e.target.value)}
                 placeholder="Ej.: 12,5%" inputMode="decimal" maxLength={30} />
             </div>
