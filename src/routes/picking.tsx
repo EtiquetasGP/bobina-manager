@@ -971,7 +971,6 @@ const consultarEscaneo = async (item: ItemPicking) => {
                           <p role="status" className="mt-2 rounded-md bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
                             Bobina correcta. Para FIFO, priorizá {avisoFifo.id_bobina}
                             {avisoFifo.ubicacion ? ` (${avisoFifo.ubicacion})` : ""}, que ingresó el {formatearFecha(avisoFifo.fecha_ingreso)}.
-                            Podés continuar con la bobina elegida.
                           </p>
                         )}
 
