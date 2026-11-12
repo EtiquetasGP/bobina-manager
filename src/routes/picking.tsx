@@ -126,6 +126,14 @@ function validarBobinaContraItem(bobina: BobinaPicking, item: ItemPicking) {
   return null;
 }
 
+function esMasAntiguaParaFifo(antigua: BobinaPicking | undefined, elegida: BobinaPicking) {
+  return Boolean(
+    antigua?.fecha_ingreso &&
+    elegida.fecha_ingreso &&
+    antigua.fecha_ingreso < elegida.fecha_ingreso,
+  );
+}
+
 function EstadoBadge({ estado }: { estado: string }) {
   const e = normalizarEstado(estado);
   if (e === "ENTREGADA" || e === "LISTA" || e === "COMPLETO") {
@@ -214,6 +222,9 @@ function Picking() {
   const [entregas, setEntregas] = useState<EntregaPreparada[]>([]);
   const [escaneos, setEscaneos] = useState<Record<number, string>>({});
   const [bobinasActivas, setBobinasActivas] = useState<Record<number, BobinaPicking | undefined>>({});
+  const [avisosFifo, setAvisosFifo] = useState<
+    Record<number, { solicitud: object; antigua?: BobinaPicking }>
+  >({});
   const [cantidades, setCantidades] = useState<Record<number, string>>({});
   const [cargandoBobinaItem, setCargandoBobinaItem] = useState<number | null>(null);
   const [selectorItem, setSelectorItem] = useState<number | null>(null);
@@ -232,6 +243,7 @@ function Picking() {
     setEntregas([]);
     setEscaneos({});
     setBobinasActivas({});
+    setAvisosFifo({});
     setCantidades({});
     setSelectorItem(null);
     setBobinasDisponibles([]);
@@ -534,6 +546,25 @@ function Picking() {
       ...actual,
       [item.id_item_picking]: "",
     }));
+    const id = item.id_item_picking;
+    const solicitud = {};
+    setValidacionesEscaneo((actual) => ({
+      ...actual,
+      [id]: { tipo: "ok", mensaje: `Bobina ${bobina.id_bobina} válida.` },
+    }));
+    setAvisosFifo((actual) => ({ ...actual, [id]: { solicitud } }));
+
+    // Es una recomendación: no demora ni bloquea la selección.
+    void listarBobinasFn({ data: { codigoEtiqueta: item.codigo_etiqueta, limite: 1 } })
+      .then(([antigua]) => {
+        if (!esMasAntiguaParaFifo(antigua, bobina)) return;
+        setAvisosFifo((actual) =>
+          actual[id]?.solicitud === solicitud
+            ? { ...actual, [id]: { solicitud, antigua } }
+            : actual,
+        );
+      })
+      .catch(() => {});
     setSelectorItem(null);
     setBobinasDisponibles([]);
   };
@@ -554,6 +585,11 @@ const consultarEscaneo = async (item: ItemPicking) => {
     return;
   }
 
+  setAvisosFifo((actual) => {
+    const siguiente = { ...actual };
+    delete siguiente[item.id_item_picking];
+    return siguiente;
+  });
   setCargandoBobinaItem(item.id_item_picking);
   setError(null);
   setMensaje(null);
@@ -594,14 +630,6 @@ const consultarEscaneo = async (item: ItemPicking) => {
     }
 
     seleccionarBobina(item, bobina);
-
-    setValidacionesEscaneo((actual) => ({
-      ...actual,
-      [item.id_item_picking]: {
-        tipo: "ok",
-        mensaje: `Bobina ${bobina.id_bobina} válida.`,
-      },
-    }));
   } catch (e) {
     setValidacionesEscaneo((actual) => ({
       ...actual,
@@ -852,6 +880,7 @@ const consultarEscaneo = async (item: ItemPicking) => {
                 const totalAlConfirmar = woYaEntregada ? item.cantidad_entregada : preparadoAhora;
                 const faltante = Math.max(item.cantidad_requerida - totalAlConfirmar, 0);
                 const bobinaActiva = bobinasActivas[item.id_item_picking];
+                const avisoFifo = bobinaActiva && avisosFifo[item.id_item_picking]?.antigua;
                 const entregasItem = entregas.filter(
                   (entrega) => entrega.idItemPicking === item.id_item_picking,
                 );
@@ -938,7 +967,16 @@ const consultarEscaneo = async (item: ItemPicking) => {
                           </Button>
                         </div>
 
-                        {validacionesEscaneo[item.id_item_picking] && (
+                        {avisoFifo && (
+                          <p role="status" className="mt-2 rounded-md bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+                            Bobina correcta. Para FIFO, priorizá {avisoFifo.id_bobina}
+                            {avisoFifo.ubicacion ? ` (${avisoFifo.ubicacion})` : ""}, que ingresó el {formatearFecha(avisoFifo.fecha_ingreso)}.
+                            Podés continuar con la bobina elegida.
+                          </p>
+                        )}
+
+                        {validacionesEscaneo[item.id_item_picking] &&
+                          (!avisoFifo || validacionesEscaneo[item.id_item_picking].tipo === "error") && (
                           <p
                             role="status"
                             className={
