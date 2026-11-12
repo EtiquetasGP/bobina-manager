@@ -22,10 +22,10 @@ export const Route = createFileRoute("/")({
 
 const acciones = [
   { label: "Recepción", icon: PackagePlus, to: "/recepcion" as const, color: "sky" },
-  { label: "Devolución", icon: Undo2, to: "/devolucion" as const, color: "teal" },
-  { label: "Consultar bobina", icon: Search, to: "/consultar-bobina" as const, color: "indigo" },
-  { label: "Inventario", icon: ClipboardList, to: "/inventario" as const, color: "amber" },
   { label: "Picking", icon: Boxes, to: "/picking" as const, color: "violet" },
+  { label: "Devolución", icon: Undo2, to: "/devolucion" as const, color: "teal" },
+  { label: "Inventario", icon: ClipboardList, to: "/inventario" as const, color: "amber" },
+  { label: "Consultar bobina", icon: Search, to: "/consultar-bobina" as const, color: "indigo" },
   {
     label: "Bases y reimpresiones",
     icon: Printer,
